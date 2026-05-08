@@ -208,6 +208,13 @@ public class NamespacePortalCommandAppService {
         return MemberResponse.from(member, userAccountRepository.findById(userId).orElse(null));
     }
 
+    @Transactional
+    public MessageResponse transferOwnership(String slug, String newOwnerId, String currentOwnerId) {
+        Namespace namespace = namespaceService.getNamespaceBySlug(slug);
+        namespaceMemberService.transferOwnership(namespace.getId(), currentOwnerId, newOwnerId);
+        return new MessageResponse("Ownership transferred successfully");
+    }
+
     private boolean canCreateNamespace(PlatformPrincipal principal) {
         return principal.platformRoles().contains("SKILL_ADMIN")
                 || principal.platformRoles().contains("SUPER_ADMIN");

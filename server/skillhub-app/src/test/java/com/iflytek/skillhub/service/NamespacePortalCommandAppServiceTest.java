@@ -2,6 +2,7 @@ package com.iflytek.skillhub.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,7 +19,9 @@ import com.iflytek.skillhub.domain.namespace.NamespaceStatus;
 import com.iflytek.skillhub.domain.namespace.NamespaceType;
 import com.iflytek.skillhub.domain.user.UserAccount;
 import com.iflytek.skillhub.domain.user.UserAccountRepository;
+import com.iflytek.skillhub.domain.shared.exception.DomainBadRequestException;
 import com.iflytek.skillhub.dto.MemberResponse;
+import com.iflytek.skillhub.dto.MessageResponse;
 import com.iflytek.skillhub.dto.NamespaceLifecycleRequest;
 import com.iflytek.skillhub.dto.NamespaceRequest;
 import com.iflytek.skillhub.dto.UpdateMemberRoleRequest;
@@ -167,5 +170,50 @@ class NamespacePortalCommandAppServiceTest {
         assertThat(result.userId()).isEqualTo("ghost");
         assertThat(result.displayName()).isNull();
         assertThat(result.email()).isNull();
+    }
+
+    @Test
+    void transferOwnership_success() {
+        Namespace ns = namespace(1L, "team-a");
+        when(namespaceService.getNamespaceBySlug("team-a")).thenReturn(ns);
+
+        MessageResponse result = service.transferOwnership("team-a", "new-owner", "current-owner");
+
+        assertThat(result.message()).isEqualTo("Ownership transferred successfully");
+        verify(namespaceMemberService).transferOwnership(1L, "current-owner", "new-owner");
+    }
+
+    @Test
+    void transferOwnership_nonOwnerFails() {
+        Namespace ns = namespace(1L, "team-a");
+        when(namespaceService.getNamespaceBySlug("team-a")).thenReturn(ns);
+        doThrow(new DomainBadRequestException("error.namespace.owner.current.invalid"))
+                .when(namespaceMemberService).transferOwnership(1L, "non-owner", "new-owner");
+
+        assertThrows(DomainBadRequestException.class,
+                () -> service.transferOwnership("team-a", "new-owner", "non-owner"));
+    }
+
+    @Test
+    void transferOwnership_targetNotFoundFails() {
+        Namespace ns = namespace(1L, "team-a");
+        when(namespaceService.getNamespaceBySlug("team-a")).thenReturn(ns);
+        doThrow(new DomainBadRequestException("error.namespace.owner.new.notFound"))
+                .when(namespaceMemberService).transferOwnership(1L, "owner-1", "non-existent");
+
+        assertThrows(DomainBadRequestException.class,
+                () -> service.transferOwnership("team-a", "non-existent", "owner-1"));
+    }
+
+    @Test
+    void transferOwnership_frozenNamespaceFails() {
+        Namespace ns = namespace(1L, "team-a");
+        ns.setStatus(NamespaceStatus.FROZEN);
+        when(namespaceService.getNamespaceBySlug("team-a")).thenReturn(ns);
+        doThrow(new DomainBadRequestException("error.namespace.readonly", "team-a"))
+                .when(namespaceMemberService).transferOwnership(1L, "owner-1", "new-owner");
+
+        assertThrows(DomainBadRequestException.class,
+                () -> service.transferOwnership("team-a", "new-owner", "owner-1"));
     }
 }

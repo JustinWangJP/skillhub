@@ -16,6 +16,7 @@ import com.iflytek.skillhub.dto.NamespaceLifecycleRequest;
 import com.iflytek.skillhub.dto.NamespaceRequest;
 import com.iflytek.skillhub.dto.NamespaceResponse;
 import com.iflytek.skillhub.dto.PageResponse;
+import com.iflytek.skillhub.dto.TransferOwnershipRequest;
 import com.iflytek.skillhub.dto.UpdateMemberRoleRequest;
 import com.iflytek.skillhub.service.AuditRequestContext;
 import com.iflytek.skillhub.service.GovernanceWorkflowAppService;
@@ -195,5 +196,14 @@ public class NamespaceController extends BaseApiController {
             @RequestAttribute("userId") String operatorUserId) {
         return ok("response.success.updated",
                 namespacePortalCommandAppService.updateMemberRole(slug, userId, request, operatorUserId));
+    }
+
+    @PostMapping("/namespaces/{slug}/transfer-ownership")
+    public ApiResponse<MessageResponse> transferOwnership(
+            @PathVariable String slug,
+            @Valid @RequestBody TransferOwnershipRequest request,
+            @RequestAttribute("userId") String currentOwnerId) {
+        return ok("response.success.updated",
+                namespacePortalCommandAppService.transferOwnership(slug, request.newOwnerId(), currentOwnerId));
     }
 }
