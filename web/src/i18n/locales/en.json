@@ -564,6 +564,7 @@
     "filterDisabled": "Disabled",
     "empty": "No user data",
     "colUsername": "Username",
+    "colUserId": "User ID",
     "colEmail": "Email",
     "colStatus": "Status",
     "colRole": "Role",
