@@ -50,12 +50,12 @@ describe('publish --dry-run', () => {
     expect(registry.received.publish).toBeNull()
   })
 
-  test('--dry-run with --json returns structured response', async () => {
+  test('--dry-run with --json returns structured response on warnings (valid=false)', async () => {
     const env = await createTempHome()
     registry = await startFakeRegistry({
       token: 'sk_ok',
       dryRunResponse: {
-        valid: true,
+        valid: false,
         errors: [],
         warnings: ['Disallowed file extension: data.bin'],
         resolvedSlug: 'my-skill',
@@ -70,9 +70,9 @@ describe('publish --dry-run', () => {
       USERPROFILE: env.home
     })
 
-    expect(result.exitCode).toBe(0)
+    expect(result.exitCode).toBe(6)
     const json = JSON.parse(result.stdout)
-    expect(json.valid).toBe(true)
+    expect(json.valid).toBe(false)
     expect(json.resolvedSlug).toBe('my-skill')
     expect(json.resolvedVersion).toBe('2.0.0')
     expect(json.warnings).toContain('Disallowed file extension: data.bin')

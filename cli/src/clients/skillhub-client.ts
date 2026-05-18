@@ -151,8 +151,11 @@ export class SkillHubClient {
   }
 
   private async handleJsonResponse<T>(response: Response): Promise<T> {
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new CliError('authentication failed', EXIT.auth, { registry: this.registry, next: 'run `skillhub login`' })
+    }
+    if (response.status === 403) {
+      throw new CliError('access denied — token may lack required scope', EXIT.auth, { registry: this.registry, next: 'regenerate token with required scopes or run `skillhub login`' })
     }
     if (response.status === 404) {
       throw new CliError('resource not found', EXIT.generic, { registry: this.registry })
