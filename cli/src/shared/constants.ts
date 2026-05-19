@@ -8,5 +8,6 @@ export const EXIT = {
   auth: 2,
   network: 3,
   filesystem: 4,
-  usage: 5
+  usage: 5,
+  validation: 6
 } as const

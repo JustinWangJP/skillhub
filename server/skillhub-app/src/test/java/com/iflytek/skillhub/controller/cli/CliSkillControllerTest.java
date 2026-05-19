@@ -103,7 +103,9 @@ class CliSkillControllerTest {
         PlatformPrincipal principal = new PlatformPrincipal(
                 "user-1", "tester", "t@example.com", "", "api_token", Set.of("USER"));
         var auth = new UsernamePasswordAuthenticationToken(
-                principal, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                principal, null, List.of(
+                        new SimpleGrantedAuthority("ROLE_USER"),
+                        new SimpleGrantedAuthority("SCOPE_skill:delete")));
 
         given(cliSkillAppService.deleteRemote(
                 org.mockito.ArgumentMatchers.eq("global"),

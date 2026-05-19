@@ -44,6 +44,14 @@ export interface PublishResponse {
   visibility: string
 }
 
+export interface DryRunResponse {
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+  resolvedSlug: string | null
+  resolvedVersion: string | null
+}
+
 export class SkillHubClient {
   constructor(
     readonly registry: string,
@@ -113,6 +121,23 @@ export class SkillHubClient {
     return this.handleJsonResponse<PublishResponse>(response)
   }
 
+  async validatePublish(namespace: string, file: Blob, visibility: string, fileName = 'skill.zip'): Promise<DryRunResponse> {
+    const formData = new FormData()
+    formData.append('file', file, fileName)
+    formData.append('visibility', visibility)
+    let response: Response
+    try {
+      response = await this.fetchImpl(`${this.registry}/api/cli/v1/skills/${namespace}/publish/validate`, {
+        method: 'POST',
+        headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+        body: formData
+      })
+    } catch {
+      throw new CliError('registry unreachable', EXIT.network, { registry: this.registry, next: 'check network or pass --registry' })
+    }
+    return this.handleJsonResponse<DryRunResponse>(response)
+  }
+
   private async getJson<T>(path: string): Promise<T> {
     let response: Response
     try {
@@ -126,8 +151,11 @@ export class SkillHubClient {
   }
 
   private async handleJsonResponse<T>(response: Response): Promise<T> {
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new CliError('authentication failed', EXIT.auth, { registry: this.registry, next: 'run `skillhub login`' })
+    }
+    if (response.status === 403) {
+      throw new CliError('access denied — token may lack required scope', EXIT.auth, { registry: this.registry, next: 'regenerate token with required scopes or run `skillhub login`' })
     }
     if (response.status === 404) {
       throw new CliError('resource not found', EXIT.generic, { registry: this.registry })

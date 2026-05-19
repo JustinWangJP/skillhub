@@ -22,16 +22,19 @@ export function createFakeRegistry(handlers: Record<string, FakeHandler>) {
 /**
  * Controls how a specific endpoint behaves when a failure is injected:
  *   'auth'         => 401 { code: 401, message: 'unauthorized' }
+ *   'forbidden'    => 403 { code: 403, message: 'forbidden' }
  *   'not_found'    => 404 { code: 404, message: 'not found' }
  *   'server_error' => 500 { code: 500, message: 'internal error' }
  *   'network'      => handler throws, causing fetch() to reject with a TypeError
  */
-export type FailureMode = 'auth' | 'not_found' | 'server_error' | 'network'
+export type FailureMode = 'auth' | 'forbidden' | 'not_found' | 'server_error' | 'network'
 
 function failureResponse(mode: FailureMode): Response {
   switch (mode) {
     case 'auth':
       return Response.json({ code: 401, message: 'unauthorized' }, { status: 401 })
+    case 'forbidden':
+      return Response.json({ code: 403, message: 'forbidden' }, { status: 403 })
     case 'not_found':
       return Response.json({ code: 404, message: 'not found' }, { status: 404 })
     case 'server_error':
@@ -91,6 +94,12 @@ export interface CapturedPublish {
   visibility: string
 }
 
+export interface CapturedValidate {
+  namespace: string
+  fileName: string
+  visibility: string
+}
+
 /** Last resolve GET: useful for verifying --version is forwarded as ?version=. */
 export interface CapturedResolve {
   namespace: string
@@ -116,6 +125,8 @@ interface FakeRegistryOptions {
   searchItems?: Array<{ namespace: string; slug: string; latestVersion: string; summary: string }>
   /** Skills available for resolve / download / delete / publish. */
   skills?: FakeSkill[]
+  /** Response to return for publish/validate (dry-run) requests. */
+  dryRunResponse?: { valid: boolean; errors: string[]; warnings: string[]; resolvedSlug: string | null; resolvedVersion: string | null }
   /**
    * Per-endpoint failure injection. When set for an endpoint, that endpoint
    * ignores all other logic and returns the specified failure (or throws for
@@ -128,6 +139,7 @@ interface FakeRegistryOptions {
     download?: FailureMode
     deleteRemote?: FailureMode
     publish?: FailureMode
+    validate?: FailureMode
   }
 }
 
@@ -167,7 +179,8 @@ export async function startFakeRegistry(options: FakeRegistryOptions = {}) {
     publish: CapturedPublish | null
     resolve: CapturedResolve | null
     delete: CapturedDelete | null
-  } = { publish: null, resolve: null, delete: null }
+    validate: CapturedValidate | null
+  } = { publish: null, resolve: null, delete: null, validate: null }
 
   // If any endpoint is configured with 'network' failure mode, we need a real
   // TCP-level failure. Start a connection-dropping server and return its URL
@@ -336,6 +349,34 @@ export async function startFakeRegistry(options: FakeRegistryOptions = {}) {
             namespace,
             slug
           }
+        })
+      }
+
+      // Validate (dry-run): POST /api/cli/v1/skills/:namespace/publish/validate
+      const validateMatch = path.match(/^\/api\/cli\/v1\/skills\/([^/]+)\/publish\/validate$/)
+      if (validateMatch && req.method === 'POST') {
+        if (options.failures?.validate) return failureResponse(options.failures.validate)
+        const authErr = checkAuth(req)
+        if (authErr) return authErr
+        const namespace = validateMatch[1]!
+
+        return req.formData().then(form => {
+          const fileField = form.get('file')
+          const visibility = (form.get('visibility') as string | null) ?? 'PUBLIC'
+          let fileName = 'skill.zip'
+          if (fileField instanceof File) {
+            fileName = fileField.name || fileName
+          }
+          state.validate = { namespace, fileName, visibility }
+
+          const dryRunData = options.dryRunResponse ?? {
+            valid: true,
+            errors: [],
+            warnings: [],
+            resolvedSlug: fileName.replace(/\.zip$/, ''),
+            resolvedVersion: '1.0.0'
+          }
+          return Response.json({ code: 0, data: dryRunData })
         })
       }
 

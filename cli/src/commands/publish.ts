@@ -14,6 +14,7 @@ export interface PublishCommandOptions {
   registry?: string
   token?: string
   json?: boolean
+  dryRun?: boolean
 }
 
 export async function publishCommand(path: string, options: PublishCommandOptions): Promise<string> {
@@ -40,7 +41,6 @@ export async function publishCommand(path: string, options: PublishCommandOption
   let archiveBlob: Blob
   let archiveName: string
   if (pathStat.isFile()) {
-    // If input is a file, check if it's already a zip
     if (await isZipFile(path)) {
       const buffer = await readFile(path)
       archiveBlob = new Blob([buffer], { type: 'application/zip' })
@@ -49,7 +49,6 @@ export async function publishCommand(path: string, options: PublishCommandOption
       throw new CliError(`file must be a zip archive: ${path}`, EXIT.filesystem, { path })
     }
   } else if (pathStat.isDirectory()) {
-    // If input is a directory, create zip from it
     archiveBlob = await createZip(path)
     archiveName = `${basename(path)}.zip`
   } else {
@@ -57,6 +56,49 @@ export async function publishCommand(path: string, options: PublishCommandOption
   }
 
   const client = new SkillHubClient(registry, token)
+
+  if (options.dryRun) {
+    const result = await client.validatePublish(namespace, archiveBlob, toServerVisibility(visibility), archiveName)
+
+    if (options.json) {
+      if (!result.valid) {
+        process.stdout.write(JSON.stringify(result) + '\n')
+        throw new CliError('validation failed', EXIT.validation)
+      }
+      return JSON.stringify(result)
+    }
+
+    const lines: string[] = []
+    if (result.valid) {
+      lines.push('Validation passed')
+    } else {
+      lines.push('Validation failed')
+    }
+    if (result.resolvedSlug) {
+      lines.push(`  Slug: ${result.resolvedSlug}`)
+    }
+    if (result.resolvedVersion) {
+      lines.push(`  Version: ${result.resolvedVersion}`)
+    }
+    if (result.errors.length > 0) {
+      lines.push('Errors:')
+      for (const error of result.errors) {
+        lines.push(`  - ${error}`)
+      }
+    }
+    if (result.warnings.length > 0) {
+      lines.push('Warnings:')
+      for (const warning of result.warnings) {
+        lines.push(`  - ${warning}`)
+      }
+    }
+    if (!result.valid) {
+      process.stdout.write(lines.join('\n') + '\n')
+      throw new CliError('validation failed', EXIT.validation)
+    }
+    return lines.join('\n')
+  }
+
   const result = await client.publish(namespace, archiveBlob, toServerVisibility(visibility), archiveName)
 
   const detailUrl = `${registry}/space/${result.namespace}/${encodeURIComponent(result.slug)}`

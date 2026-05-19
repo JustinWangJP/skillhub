@@ -95,6 +95,30 @@ public class CliSkillController extends BaseApiController {
                 namespace, slug, principal.userId(), AuditRequestContext.from(request)));
     }
 
+    @PostMapping(value = "/{namespace}/publish/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RateLimit(category = "publish", authenticated = 10, anonymous = 0)
+    public ApiResponse<CliDryRunResponse> validatePublish(
+            @PathVariable String namespace,
+            @RequestPart("file") MultipartFile file,
+            @RequestPart(value = "visibility", required = false) String visibility,
+            @AuthenticationPrincipal PlatformPrincipal principal) throws IOException {
+        List<PackageEntry> entries;
+        try {
+            entries = archiveExtractor.extract(file);
+        } catch (IllegalArgumentException e) {
+            throw new DomainBadRequestException("error.skill.publish.package.invalid", e.getMessage());
+        }
+        SkillVisibility resolvedVisibility;
+        try {
+            resolvedVisibility = SkillVisibility.valueOf((visibility != null ? visibility : "PUBLIC").toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new DomainBadRequestException("error.skill.publish.visibility.invalid", visibility);
+        }
+        var result = cliSkillAppService.validatePublish(
+                namespace, entries, principal.userId(), resolvedVisibility, principal.platformRoles());
+        return ok("response.success.read", result);
+    }
+
     @PostMapping(value = "/{namespace}/publish", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RateLimit(category = "publish", authenticated = 10, anonymous = 0)
     public ApiResponse<CliPublishResponse> publish(

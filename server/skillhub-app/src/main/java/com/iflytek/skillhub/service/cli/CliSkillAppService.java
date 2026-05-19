@@ -8,6 +8,7 @@ import com.iflytek.skillhub.domain.skill.service.SkillQueryService;
 import com.iflytek.skillhub.domain.skill.validation.PackageEntry;
 import com.iflytek.skillhub.dto.SkillSummaryResponse;
 import com.iflytek.skillhub.dto.cli.CliDeleteResponse;
+import com.iflytek.skillhub.dto.cli.CliDryRunResponse;
 import com.iflytek.skillhub.dto.cli.CliPublishResponse;
 import com.iflytek.skillhub.dto.cli.CliResolveResponse;
 import com.iflytek.skillhub.service.AuditRequestContext;
@@ -116,6 +117,18 @@ public class CliSkillAppService {
                 "delete",
                 result.namespace(),
                 result.slug()
+        );
+    }
+
+    public CliDryRunResponse validatePublish(String namespace, List<PackageEntry> entries, String publisherId, SkillVisibility visibility, Set<String> platformRoles) {
+        SkillPublishService.DryRunResult result = skillPublishService.validateOnly(
+                namespace, entries, publisherId, visibility, platformRoles);
+        return new CliDryRunResponse(
+                result.valid(),
+                result.errors(),
+                result.warnings(),
+                result.resolvedSlug(),
+                result.resolvedVersion()
         );
     }
 

@@ -1652,6 +1652,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cli/v1/skills/{namespace}/publish/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validatePublish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/profile": {
         parameters: {
             query?: never;
@@ -3947,6 +3963,22 @@ export interface components {
             slug?: string;
             version?: string;
             visibility?: string;
+        };
+        ApiResponseCliDryRunResponse: {
+            /** Format: int32 */
+            code?: number;
+            msg?: string;
+            data?: components["schemas"]["CliDryRunResponse"];
+            /** Format: date-time */
+            timestamp?: string;
+            requestId?: string;
+        };
+        CliDryRunResponse: {
+            valid?: boolean;
+            errors?: string[];
+            warnings?: string[];
+            resolvedSlug?: string | null;
+            resolvedVersion?: string | null;
         };
         UpdateProfileRequest: {
             displayName?: string;
@@ -8290,6 +8322,36 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseCliPublishResponse"];
+                };
+            };
+        };
+    };
+    validatePublish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                namespace: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    visibility?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCliDryRunResponse"];
                 };
             };
         };

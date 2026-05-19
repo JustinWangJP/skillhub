@@ -278,6 +278,7 @@ cli
   .command('publish <path>', 'Publish a local skill package')
   .option('--namespace <slug>', 'Namespace')
   .option('--visibility <v>', 'Visibility (public|namespace-only|private)')
+  .option('--dry-run', 'Validate without publishing')
   .option('--registry <url>', 'Registry URL')
   .option('--token <token>', 'API token')
   .option('--json', 'Output JSON')
