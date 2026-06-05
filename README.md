@@ -119,6 +119,10 @@ skillhub login --token sk_xxx --registry https://skill.xfyun.cn
 skillhub search pdf
 skillhub install pdf-parser --agent codex
 
+# Verify the bundled example skill after a fresh deployment
+skillhub search skillhub-hello
+skillhub install skillhub-hello --agent codex
+
 # List installed skills
 skillhub list
 ```
@@ -286,6 +290,7 @@ Recommended production baseline:
 - keep PostgreSQL / Redis bound to `127.0.0.1`
 - use external S3 / OSS via `SKILLHUB_STORAGE_S3_*`
 - change `BOOTSTRAP_ADMIN_PASSWORD` to a strong password (`validate-release-config.sh` rejects the default `ChangeMe!2026`)
+- set `SKILLHUB_BUILTIN_SKILLS_ENABLED=false` if you do not want the bundled `skillhub-hello` skill initialized in `@global`
 - rotate or disable the bootstrap admin after initial setup
 - run `make validate-release-config` before `docker compose up -d`
 
@@ -421,6 +426,8 @@ clawhub login --token YOUR_API_TOKEN
 npx clawhub search email
 npx clawhub install my-skill
 npx clawhub install my-namespace--my-skill
+npx clawhub search skillhub-hello
+npx clawhub install skillhub-hello
 
 # Publish to global namespace
 npx clawhub publish ./my-skill --slug my-skill --version 1.0.0

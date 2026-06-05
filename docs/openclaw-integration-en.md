@@ -72,6 +72,10 @@ npx clawhub search find-skills
 npx clawhub search find-skills --limit 5
 npx clawhub inspect find-skills
 
+# Bundled verification skill initialized by default on new deployments
+npx clawhub search skillhub-hello
+npx clawhub inspect skillhub-hello
+
 # Help
 npx clawhub search --help
 npx clawhub inspect --help
@@ -99,6 +103,9 @@ npx clawhub list
 # Claude Code Installation Skill Example
 npx clawhub --dir ~/.claude/skills install find-skills
 CLAWHUB_WORKDIR=~/.claude/skills npx clawhub install find-skills
+
+# Install the bundled verification skill
+npx clawhub install skillhub-hello
 
 # Help
 npx clawhub install --help
@@ -208,6 +215,12 @@ export CLAWHUB_REGISTRY=https://skillhub.your-company.com
 
 # Optionally log in before running authenticated commands
 clawhub login --token sk_your_api_token_here
+```
+
+New SkillHub deployments initialize the bundled `skillhub-hello` skill in `@global` by default. To disable built-in skill initialization, set this before starting the backend:
+
+```bash
+export SKILLHUB_BUILTIN_SKILLS_ENABLED=false
 ```
 
 ## FAQ

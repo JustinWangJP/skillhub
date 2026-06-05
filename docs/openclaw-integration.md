@@ -72,6 +72,10 @@ npx clawhub search find-skills
 npx clawhub search find-skills --limit 5 
 npx clawhub inspect find-skills
 
+# 新部署默认内置的验证 Skill
+npx clawhub search skillhub-hello
+npx clawhub inspect skillhub-hello
+
 # 使用帮助
 npx clawhub search --help
 npx clawhub inspect --help
@@ -99,6 +103,9 @@ npx clawhub list
 # Claude Code 安装 Skill 示例
 npx clawhub --dir ~/.claude/skills install find-skills
 CLAWHUB_WORKDIR=~/.claude/skills npx clawhub install find-skills
+
+# 安装默认内置的验证 Skill
+npx clawhub install skillhub-hello
 
 # 使用帮助
 npx clawhub install --help
@@ -208,6 +215,12 @@ export CLAWHUB_REGISTRY=https://skillhub.your-company.com
 
 # 可选：登录后再执行需要认证的命令
 clawhub login --token sk_your_api_token_here
+```
+
+SkillHub 新部署默认会在 `@global` 初始化内置 `skillhub-hello`。如需关闭内置 Skill 初始化，请在启动后端前设置：
+
+```bash
+export SKILLHUB_BUILTIN_SKILLS_ENABLED=false
 ```
 
 ## 常见问题

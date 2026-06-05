@@ -85,7 +85,7 @@ public class MultipartPackageExtractor {
                         normalizedPath,
                         content,
                         content.length,
-                        determineContentType(normalizedPath)
+                        SkillPackageContentTypeResolver.determineContentType(normalizedPath)
                 ));
             }
         }
@@ -113,12 +113,4 @@ public class MultipartPackageExtractor {
         return path;
     }
 
-    private String determineContentType(String filename) {
-        if (filename.endsWith(".py")) return "text/x-python";
-        if (filename.endsWith(".json")) return "application/json";
-        if (filename.endsWith(".yaml") || filename.endsWith(".yml")) return "application/x-yaml";
-        if (filename.endsWith(".txt")) return "text/plain";
-        if (filename.endsWith(".md")) return "text/markdown";
-        return "application/octet-stream";
-    }
 }

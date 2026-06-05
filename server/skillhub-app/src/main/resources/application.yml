@@ -93,6 +93,8 @@ spring:
             enable: ${SPRING_MAIL_SMTP_STARTTLS_ENABLE:false}
 
 skillhub:
+  builtin-skills:
+    enabled: ${SKILLHUB_BUILTIN_SKILLS_ENABLED:true}
   auth:
     mock:
       enabled: ${SKILLHUB_AUTH_MOCK_ENABLED:false}
