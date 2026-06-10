@@ -772,16 +772,7 @@
     "notFound": "命名空间不存在",
     "skillList": "技能列表",
     "emptyTitle": "暂无技能",
-    "emptyDescription": "该命名空间下还没有发布任何技能",
-    "downloadAll": "下载全部",
-    "downloadSelected": "下载本页选中",
-    "copyInstallManifest": "复制本页安装清单",
-    "downloadConfirmTitle": "确认命名空间下载",
-    "downloadConfirmDescription_one": "将最多请求下载 @{{namespace}} 中的 {{count}} 个 skill 包。",
-    "downloadConfirmDescription_other": "将最多请求下载 @{{namespace}} 中的 {{count}} 个 skill 包。",
-    "downloadConfirmLimitHint": "不可用的 skill 可能会被跳过；同步下载一次最多支持 {{maxSkills}} 个 skill、{{maxSize}}。",
-    "downloadConfirmAction": "下载",
-    "selectSkill": "选择 {{name}}"
+    "emptyDescription": "该命名空间下还没有发布任何技能"
   },
   "skillDetail": {
     "back": "返回上一页",

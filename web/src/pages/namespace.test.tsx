@@ -99,11 +99,10 @@ describe('NamespacePage', () => {
     expect(html).toContain('namespace.notFound')
   })
 
-  it('renders namespace distribution actions when skills are available', () => {
+  it('does not render namespace distribution controls when skills are available', () => {
     const html = renderToStaticMarkup(<NamespacePage />)
 
-    expect(html).toContain('namespace.downloadAll')
-    expect(html).toContain('namespace.downloadSelected')
-    expect(html).toContain('namespace.copyInstallManifest')
+    expect(buttonRecords).toHaveLength(0)
+    expect(html).not.toContain('type="checkbox"')
   })
 })
