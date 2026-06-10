@@ -19,10 +19,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.time.Duration;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -36,8 +34,6 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class SkillDownloadService {
     private static final Logger log = LoggerFactory.getLogger(SkillDownloadService.class);
-    private static final int MAX_NAMESPACE_BUNDLE_SKILL_COUNT = 20;
-    private static final long MAX_NAMESPACE_BUNDLE_TOTAL_BYTES = 100L * 1024 * 1024;
 
     private final NamespaceRepository namespaceRepository;
     private final SkillRepository skillRepository;
@@ -165,104 +161,6 @@ public class SkillDownloadService {
         return buildDownloadResult(skill, version);
     }
 
-    /**
-     * Builds one namespace-level archive containing each selected skill as its
-     * own versioned zip bundle.
-     */
-    public DownloadResult downloadNamespaceBundle(
-            String namespaceSlug,
-            List<String> selectedSkillSlugs,
-            String currentUserId,
-            Map<Long, NamespaceRole> userNsRoles) {
-
-        Namespace namespace = findNamespace(namespaceSlug);
-        Set<String> selected = selectedSkillSlugs == null
-                ? Set.of()
-                : new HashSet<>(selectedSkillSlugs.stream()
-                        .filter(slug -> slug != null && !slug.isBlank())
-                        .map(slug -> slug.trim().replaceFirst("^@", ""))
-                        .toList());
-
-        if (currentUserId == null && selected.isEmpty()) {
-            throw new DomainBadRequestException("error.namespace.skills.download.selectionRequired");
-        }
-
-        List<NamespaceBundleCandidate> candidates = skillRepository.findByNamespaceIdAndStatus(namespace.getId(), SkillStatus.ACTIVE)
-                .stream()
-                .filter(skill -> selected.isEmpty() || selected.contains(skill.getSlug()))
-                .sorted(Comparator.comparing(Skill::getSlug))
-                .map(skill -> toNamespaceBundleCandidate(namespace, skill, currentUserId, userNsRoles))
-                .flatMap(java.util.Optional::stream)
-                .toList();
-
-        if (candidates.isEmpty()) {
-            throw new DomainBadRequestException("error.namespace.skills.download.empty", namespaceSlug);
-        }
-
-        if (candidates.size() > MAX_NAMESPACE_BUNDLE_SKILL_COUNT) {
-            throw new DomainBadRequestException(
-                    "error.namespace.skills.download.tooMany",
-                    MAX_NAMESPACE_BUNDLE_SKILL_COUNT
-            );
-        }
-
-        long estimatedBundleBytes = candidates.stream()
-                .mapToLong(this::estimateNamespaceBundleEntryBytes)
-                .sum();
-        if (estimatedBundleBytes > MAX_NAMESPACE_BUNDLE_TOTAL_BYTES) {
-            throw new DomainBadRequestException(
-                    "error.namespace.skills.download.tooLarge",
-                    MAX_NAMESPACE_BUNDLE_TOTAL_BYTES
-            );
-        }
-
-        List<NamespaceBundleEntry> entries = candidates.stream()
-                .map(candidate -> new NamespaceBundleEntry(
-                        candidate.skill(),
-                        candidate.version(),
-                        buildDownloadResult(candidate.skill(), candidate.version())))
-                .toList();
-
-        long totalBundleBytes = entries.stream()
-                .mapToLong(entry -> entry.downloadResult().contentLength())
-                .sum();
-        if (totalBundleBytes > MAX_NAMESPACE_BUNDLE_TOTAL_BYTES) {
-            throw new DomainBadRequestException(
-                    "error.namespace.skills.download.tooLarge",
-                    MAX_NAMESPACE_BUNDLE_TOTAL_BYTES
-            );
-        }
-
-        byte[] bundle = createNamespaceBundle(namespace.getSlug(), entries);
-        entries.forEach(entry -> recordPublishedDownload(entry.skill(), entry.version()));
-
-        return new DownloadResult(
-                () -> new ByteArrayInputStream(bundle),
-                sanitizeFilename(namespace.getSlug()) + "-skills.zip",
-                bundle.length,
-                "application/zip",
-                null,
-                false
-        );
-    }
-
-    private long estimateNamespaceBundleEntryBytes(NamespaceBundleCandidate candidate) {
-        String storageKey = buildBundleStorageKey(candidate.skill(), candidate.version());
-        if (objectStorageService.exists(storageKey)) {
-            return objectStorageService.getMetadata(storageKey).size();
-        }
-
-        List<SkillFile> files = skillFileRepository.findByVersionId(candidate.version().getId()).stream()
-                .filter(file -> objectStorageService.exists(file.getStorageKey()))
-                .toList();
-        if (files.isEmpty()) {
-            throw new DomainBadRequestException("error.skill.bundle.notFound");
-        }
-        return files.stream()
-                .mapToLong(file -> file.getFileSize() != null ? file.getFileSize() : 0L)
-                .sum();
-    }
-
     private DownloadResult downloadVersion(Skill skill, SkillVersion version) {
         assertPublishedAccessible(skill);
         assertDownloadableVersion(skill, version);
@@ -275,64 +173,10 @@ public class SkillDownloadService {
         return result;
     }
 
-    private java.util.Optional<NamespaceBundleCandidate> toNamespaceBundleCandidate(
-            Namespace namespace,
-            Skill skill,
-            String currentUserId,
-            Map<Long, NamespaceRole> userNsRoles) {
-        if (!canIncludeInNamespaceBundle(namespace, skill, currentUserId, userNsRoles)) {
-            return java.util.Optional.empty();
-        }
-        if (skill.getLatestVersionId() == null) {
-            return java.util.Optional.empty();
-        }
-        SkillVersion version = skillVersionRepository.findById(skill.getLatestVersionId())
-                .orElseThrow(() -> new DomainBadRequestException("error.skill.version.latest.notFound"));
-        if (version.getStatus() != SkillVersionStatus.PUBLISHED) {
-            return java.util.Optional.empty();
-        }
-        return java.util.Optional.of(new NamespaceBundleCandidate(skill, version));
-    }
-
-    private boolean canIncludeInNamespaceBundle(
-            Namespace namespace,
-            Skill skill,
-            String currentUserId,
-            Map<Long, NamespaceRole> userNsRoles) {
-        if (currentUserId == null && !isAnonymousDownloadAllowed(skill)) {
-            return false;
-        }
-        return visibilityChecker.canAccess(skill, currentUserId, userNsRoles);
-    }
-
-    private byte[] createNamespaceBundle(String namespaceSlug, List<NamespaceBundleEntry> entries) {
-        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-             ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream)) {
-            for (NamespaceBundleEntry entry : entries) {
-                ZipEntry zipEntry = new ZipEntry(namespaceSlug + "/" + entry.skill().getSlug() + "-" + entry.version().getVersion() + ".zip");
-                zipOutputStream.putNextEntry(zipEntry);
-                try (InputStream inputStream = entry.downloadResult().openContent()) {
-                    inputStream.transferTo(zipOutputStream);
-                }
-                zipOutputStream.closeEntry();
-            }
-            zipOutputStream.finish();
-            return outputStream.toByteArray();
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to build namespace skill bundle zip", e);
-        }
-    }
-
     private void recordPublishedDownload(Skill skill, SkillVersion version) {
         skillRepository.incrementDownloadCount(skill.getId());
         skillVersionStatsRepository.incrementDownloadCount(version.getId(), skill.getId());
         eventPublisher.publishEvent(new SkillDownloadedEvent(skill.getId(), version.getId()));
-    }
-
-    private record NamespaceBundleEntry(Skill skill, SkillVersion version, DownloadResult downloadResult) {
-    }
-
-    private record NamespaceBundleCandidate(Skill skill, SkillVersion version) {
     }
 
     private DownloadResult buildDownloadResult(Skill skill, SkillVersion version) {

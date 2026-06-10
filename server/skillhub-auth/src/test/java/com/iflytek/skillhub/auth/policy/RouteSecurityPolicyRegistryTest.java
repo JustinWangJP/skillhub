@@ -74,20 +74,20 @@ class RouteSecurityPolicyRegistryTest {
     }
 
     @Test
-    void authorizationPolicies_shouldKeepNamespaceDownloadRoutesAnonymous() {
+    void authorizationPolicies_shouldNotDeclareNamespaceBundleDownloadRoutes() {
+        String v1Route = "/api/v1/namespaces/*/skills/" + "download";
+        String webRoute = "/api/web/namespaces/*/skills/" + "download";
         boolean matchedV1 = registry.authorizationPolicies().stream()
                 .anyMatch(policy -> policy.method() == HttpMethod.GET
-                        && "/api/v1/namespaces/*/skills/download".equals(policy.pattern())
-                        && policy.accessLevel() == RouteSecurityPolicyRegistry.AccessLevel.PERMIT_ALL);
+                        && v1Route.equals(policy.pattern()));
         boolean matchedWeb = registry.authorizationPolicies().stream()
                 .anyMatch(policy -> policy.method() == HttpMethod.GET
-                        && "/api/web/namespaces/*/skills/download".equals(policy.pattern())
-                        && policy.accessLevel() == RouteSecurityPolicyRegistry.AccessLevel.PERMIT_ALL);
+                        && webRoute.equals(policy.pattern()));
 
-        assertTrue(matchedV1);
-        assertTrue(matchedWeb);
-        assertTrue(registry.authorizeApiToken("GET", "/api/v1/namespaces/global/skills/download", Set.of()).allowed());
-        assertTrue(registry.authorizeApiToken("GET", "/api/web/namespaces/global/skills/download", Set.of()).allowed());
+        assertFalse(matchedV1);
+        assertFalse(matchedWeb);
+        assertFalse(registry.authorizeApiToken("GET", "/api/v1/namespaces/global/skills/" + "download", Set.of()).allowed());
+        assertFalse(registry.authorizeApiToken("GET", "/api/web/namespaces/global/skills/" + "download", Set.of()).allowed());
     }
 
     @Test

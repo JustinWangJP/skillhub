@@ -3,7 +3,6 @@ package com.iflytek.skillhub.controller.portal;
 import com.iflytek.skillhub.controller.BaseApiController;
 import com.iflytek.skillhub.auth.rbac.PlatformPrincipal;
 import com.iflytek.skillhub.domain.namespace.NamespaceRole;
-import com.iflytek.skillhub.domain.skill.service.SkillDownloadService;
 import com.iflytek.skillhub.dto.ApiResponse;
 import com.iflytek.skillhub.dto.ApiResponseFactory;
 import com.iflytek.skillhub.dto.BatchMemberRequest;
@@ -19,7 +18,6 @@ import com.iflytek.skillhub.dto.NamespaceResponse;
 import com.iflytek.skillhub.dto.PageResponse;
 import com.iflytek.skillhub.dto.TransferOwnershipRequest;
 import com.iflytek.skillhub.dto.UpdateMemberRoleRequest;
-import com.iflytek.skillhub.ratelimit.RateLimit;
 import com.iflytek.skillhub.service.AuditRequestContext;
 import com.iflytek.skillhub.service.GovernanceWorkflowAppService;
 import com.iflytek.skillhub.service.NamespacePortalCommandAppService;
@@ -27,11 +25,7 @@ import com.iflytek.skillhub.service.NamespacePortalQueryAppService;
 import com.iflytek.skillhub.service.NamespaceMemberCandidateService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -50,20 +44,17 @@ public class NamespaceController extends BaseApiController {
     private final NamespacePortalCommandAppService namespacePortalCommandAppService;
     private final NamespaceMemberCandidateService namespaceMemberCandidateService;
     private final GovernanceWorkflowAppService governanceWorkflowAppService;
-    private final SkillDownloadService skillDownloadService;
 
     public NamespaceController(NamespacePortalQueryAppService namespacePortalQueryAppService,
                                NamespacePortalCommandAppService namespacePortalCommandAppService,
                                NamespaceMemberCandidateService namespaceMemberCandidateService,
                                GovernanceWorkflowAppService governanceWorkflowAppService,
-                               SkillDownloadService skillDownloadService,
                                ApiResponseFactory responseFactory) {
         super(responseFactory);
         this.namespacePortalQueryAppService = namespacePortalQueryAppService;
         this.namespacePortalCommandAppService = namespacePortalCommandAppService;
         this.namespaceMemberCandidateService = namespaceMemberCandidateService;
         this.governanceWorkflowAppService = governanceWorkflowAppService;
-        this.skillDownloadService = skillDownloadService;
     }
 
     @GetMapping("/namespaces")
@@ -176,27 +167,6 @@ public class NamespaceController extends BaseApiController {
             @RequestParam(defaultValue = "10") int size,
             @RequestAttribute("userId") String userId) {
         return ok("response.success.read", namespaceMemberCandidateService.searchCandidates(slug, search, userId, size));
-    }
-
-    @GetMapping("/namespaces/{slug}/skills/download")
-    @RateLimit(category = "download", authenticated = 30, anonymous = 10)
-    public ResponseEntity<InputStreamResource> downloadNamespaceSkills(
-            @PathVariable String slug,
-            @RequestParam(name = "skill", required = false) List<String> selectedSkills,
-            @RequestAttribute(value = "userId", required = false) String userId,
-            @RequestAttribute(value = "userNsRoles", required = false) Map<Long, NamespaceRole> userNsRoles) {
-
-        SkillDownloadService.DownloadResult result = skillDownloadService.downloadNamespaceBundle(
-                slug,
-                selectedSkills != null ? selectedSkills : List.of(),
-                userId,
-                userNsRoles != null ? userNsRoles : Map.of());
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + result.filename() + "\"")
-                .contentType(MediaType.parseMediaType(result.contentType()))
-                .contentLength(result.contentLength())
-                .body(new InputStreamResource(result.openContent()));
     }
 
     @PostMapping("/namespaces/{slug}/members")

@@ -16,7 +16,6 @@ import com.iflytek.skillhub.domain.skill.service.SkillQueryService;
 import com.iflytek.skillhub.metrics.SkillHubMetrics;
 import com.iflytek.skillhub.ratelimit.RateLimiter;
 import java.io.ByteArrayInputStream;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -199,29 +198,5 @@ class SkillControllerDownloadTest {
                 "ratelimit:download:user:test-user:ns:global:slug:demo-skill:version:1.0.0",
                 120,
                 60);
-    }
-
-    @Test
-    void downloadNamespaceBundle_streamsSelectedNamespaceSkills() throws Exception {
-        given(rateLimiter.tryAcquire(anyString(), anyInt(), anyInt())).willReturn(true);
-        given(skillDownloadService.downloadNamespaceBundle("team-ai", List.of("alpha"), "test-user", java.util.Map.of()))
-            .willReturn(new SkillDownloadService.DownloadResult(
-                () -> new ByteArrayInputStream("zip".getBytes()),
-                "team-ai-skills.zip",
-                3L,
-                "application/zip",
-                null,
-                false
-            ));
-
-        mockMvc.perform(get("/api/web/namespaces/team-ai/skills/download")
-                .param("skill", "alpha")
-                .with(user("test-user"))
-                .requestAttr("userId", "test-user")
-                .with(csrf()))
-            .andExpect(status().isOk())
-            .andExpect(header().string("Content-Disposition", "attachment; filename=\"team-ai-skills.zip\""));
-
-        verify(skillDownloadService).downloadNamespaceBundle("team-ai", List.of("alpha"), "test-user", java.util.Map.of());
     }
 }
