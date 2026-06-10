@@ -126,10 +126,21 @@ public class BuiltinSkillInitializer {
             return;
         }
 
+        int published = 0;
+        int idempotentSkipped = 0;
+        int conflictSkipped = 0;
+        int failed = 0;
         for (ManifestItem item : items) {
             try {
-                syncItem(namespace.get(), item);
+                SyncOutcome outcome = syncItem(namespace.get(), item);
+                switch (outcome) {
+                    case PUBLISHED -> published++;
+                    case IDEMPOTENT_SKIPPED -> idempotentSkipped++;
+                    case CONFLICT_SKIPPED -> conflictSkipped++;
+                    case FAILED -> failed++;
+                }
             } catch (Exception exception) {
+                failed++;
                 log.error(
                         "Failed to synchronize built-in skill slug={} version={}: {}",
                         item.slug(),
@@ -139,6 +150,14 @@ public class BuiltinSkillInitializer {
                 );
             }
         }
+        log.info(
+                "Built-in skill synchronization finished: total={}, published={}, idempotentSkipped={}, conflictSkipped={}, failed={}",
+                items.size(),
+                published,
+                idempotentSkipped,
+                conflictSkipped,
+                failed
+        );
     }
 
     private boolean ensureSystemPublisher(Namespace namespace) {
@@ -171,21 +190,22 @@ public class BuiltinSkillInitializer {
         return true;
     }
 
-    private void syncItem(Namespace namespace, ManifestItem item) throws Exception {
-        if (shouldSkipBeforeDownload(namespace.getId(), item)) {
-            return;
+    private SyncOutcome syncItem(Namespace namespace, ManifestItem item) throws Exception {
+        Optional<SyncOutcome> skipBeforeDownload = shouldSkipBeforeDownload(namespace.getId(), item);
+        if (skipBeforeDownload.isPresent()) {
+            return skipBeforeDownload.get();
         }
 
         Optional<URI> packageUri = parsePackageUri(item);
         if (packageUri.isEmpty()) {
-            return;
+            return SyncOutcome.FAILED;
         }
 
         Optional<byte[]> packageBytes = downloader.download(packageUri.get());
         if (packageBytes.isEmpty()) {
             log.warn("Skipping built-in skill slug={} version={} because package download failed",
                     item.slug(), item.version());
-            return;
+            return SyncOutcome.FAILED;
         }
 
         SkillPackageArchiveExtractor.ExtractionResult extractionResult = extractor.extract(packageBytes.get());
@@ -199,7 +219,7 @@ public class BuiltinSkillInitializer {
                     item.version(),
                     packageSlug
             );
-            return;
+            return SyncOutcome.FAILED;
         }
         if (!item.version().equals(metadata.version())) {
             log.warn(
@@ -208,11 +228,12 @@ public class BuiltinSkillInitializer {
                     item.version(),
                     metadata.version()
             );
-            return;
+            return SyncOutcome.FAILED;
         }
 
-        if (shouldSkipExisting(namespace.getId(), item, entries)) {
-            return;
+        Optional<SyncOutcome> skipExisting = shouldSkipExisting(namespace.getId(), item, entries);
+        if (skipExisting.isPresent()) {
+            return skipExisting.get();
         }
 
         try {
@@ -226,14 +247,16 @@ public class BuiltinSkillInitializer {
             );
             log.info("Published built-in skill slug={} version={} to @{}",
                     item.slug(), item.version(), GLOBAL_NAMESPACE);
+            return SyncOutcome.PUBLISHED;
         } catch (RuntimeException exception) {
             if (isAlreadyPublishedWithSameFingerprint(namespace.getId(), item, entries)) {
                 log.info("Built-in skill slug={} version={} was published concurrently, skipping",
                         item.slug(), item.version());
-                return;
+                return SyncOutcome.IDEMPOTENT_SKIPPED;
             }
             log.error("Failed to publish built-in skill slug={} version={}: {}",
                     item.slug(), item.version(), exception.getMessage(), exception);
+            return SyncOutcome.FAILED;
         }
     }
 
@@ -256,25 +279,25 @@ public class BuiltinSkillInitializer {
         return metadataParser.parse(new String(skillMd.content(), StandardCharsets.UTF_8));
     }
 
-    private boolean shouldSkipBeforeDownload(Long namespaceId, ManifestItem item) {
+    private Optional<SyncOutcome> shouldSkipBeforeDownload(Long namespaceId, ManifestItem item) {
         List<Skill> existingSkills = skillRepository.findByNamespaceIdAndSlug(namespaceId, item.slug());
         if (hasOtherOwnerConflict(existingSkills)) {
             log.warn("Skipping built-in skill slug={} before download because the slug already belongs to another user",
                     item.slug());
-            return true;
+            return Optional.of(SyncOutcome.CONFLICT_SKIPPED);
         }
 
         Optional<Skill> builtinSkill = existingSkills.stream()
                 .filter(skill -> SYSTEM_PUBLISHER_ID.equals(skill.getOwnerId()))
                 .findFirst();
         if (builtinSkill.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
 
         Optional<SkillVersion> existingVersion = skillVersionRepository
                 .findBySkillIdAndVersion(builtinSkill.get().getId(), item.version());
         if (existingVersion.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
 
         SkillVersion version = existingVersion.get();
@@ -285,35 +308,35 @@ public class BuiltinSkillInitializer {
             log.info("Skipping built-in skill slug={} version={} before download because existing version status is {}",
                     item.slug(), item.version(), version.getStatus());
         }
-        return true;
+        return Optional.of(SyncOutcome.IDEMPOTENT_SKIPPED);
     }
 
-    private boolean shouldSkipExisting(Long namespaceId, ManifestItem item, List<PackageEntry> entries) {
+    private Optional<SyncOutcome> shouldSkipExisting(Long namespaceId, ManifestItem item, List<PackageEntry> entries) {
         List<Skill> existingSkills = skillRepository.findByNamespaceIdAndSlug(namespaceId, item.slug());
         if (hasOtherOwnerConflict(existingSkills)) {
             log.warn("Skipping built-in skill slug={} because the slug already belongs to another user",
                     item.slug());
-            return true;
+            return Optional.of(SyncOutcome.CONFLICT_SKIPPED);
         }
 
         Optional<Skill> builtinSkill = existingSkills.stream()
                 .filter(skill -> SYSTEM_PUBLISHER_ID.equals(skill.getOwnerId()))
                 .findFirst();
         if (builtinSkill.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
 
         Optional<SkillVersion> existingVersion = skillVersionRepository
                 .findBySkillIdAndVersion(builtinSkill.get().getId(), item.version());
         if (existingVersion.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
 
         SkillVersion version = existingVersion.get();
         if (version.getStatus() != SkillVersionStatus.PUBLISHED) {
             log.info("Skipping built-in skill slug={} version={} because existing version status is {}",
                     item.slug(), item.version(), version.getStatus());
-            return true;
+            return Optional.of(SyncOutcome.IDEMPOTENT_SKIPPED);
         }
 
         String packageFingerprint = computeFingerprint(entries);
@@ -321,6 +344,7 @@ public class BuiltinSkillInitializer {
         if (packageFingerprint.equals(existingFingerprint)) {
             log.info("Skipping built-in skill slug={} version={} because it is already published",
                     item.slug(), item.version());
+            return Optional.of(SyncOutcome.IDEMPOTENT_SKIPPED);
         } else {
             log.warn(
                     "Skipping built-in skill slug={} version={} because published fingerprint differs: existing={}, package={}",
@@ -329,8 +353,8 @@ public class BuiltinSkillInitializer {
                     existingFingerprint,
                     packageFingerprint
             );
+            return Optional.of(SyncOutcome.CONFLICT_SKIPPED);
         }
-        return true;
     }
 
     private boolean isAlreadyPublishedWithSameFingerprint(Long namespaceId, ManifestItem item, List<PackageEntry> entries) {
@@ -403,5 +427,12 @@ public class BuiltinSkillInitializer {
     }
 
     private record FileDigest(String path, String sha256) {
+    }
+
+    private enum SyncOutcome {
+        PUBLISHED,
+        IDEMPOTENT_SKIPPED,
+        CONFLICT_SKIPPED,
+        FAILED
     }
 }

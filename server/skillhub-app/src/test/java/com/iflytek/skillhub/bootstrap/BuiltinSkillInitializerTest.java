@@ -196,14 +196,16 @@ class BuiltinSkillInitializerTest {
     }
 
     @Test
-    void skipsUnpublishedSkillOwnedByAnotherUserBeforeDownloadingPackage() {
+    void skipsSkillOwnedByAnotherUserAfterDownloadingPackage() throws Exception {
         Skill otherSkill = skill(100L, "skillhub-hello", "someone-else");
-        givenManifestAndSystemPublisher();
-        when(skillRepository.findByNamespaceIdAndSlug(1L, "skillhub-hello")).thenReturn(List.of(otherSkill));
+        givenExtractedPackage(packageEntries("skillhub-hello", "1.0.0", "same"));
+        when(skillRepository.findByNamespaceIdAndSlug(1L, "skillhub-hello"))
+                .thenReturn(List.of())
+                .thenReturn(List.of(otherSkill));
 
         runInitializer();
 
-        verify(downloader, never()).download(any());
+        verify(downloader).download(URI.create(ITEM.url()));
         verify(skillPublishService, never()).publishFromEntries(any(), any(), any(), any(), any(), eq(false));
     }
 

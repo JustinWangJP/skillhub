@@ -455,6 +455,7 @@ class SkillPublishServiceTest {
 
         Skill skill = new Skill(1L, "test-skill", publisherId, SkillVisibility.PUBLIC);
         setId(skill, 1L);
+        skill.setLatestVersionId(8L);
         SkillVersion draftVersion = new SkillVersion(1L, "1.0.0-beta", publisherId);
         draftVersion.setStatus(SkillVersionStatus.DRAFT);
         setId(draftVersion, 8L);
@@ -485,10 +486,14 @@ class SkillPublishServiceTest {
                 Set.of()
         );
 
-        InOrder inOrder = inOrder(skillVersionRepository);
+        assertNull(skill.getLatestVersionId());
+        InOrder inOrder = inOrder(skillRepository, skillVersionRepository);
+        inOrder.verify(skillRepository).save(skill);
+        inOrder.verify(skillRepository).flush();
         inOrder.verify(skillVersionRepository).delete(draftVersion);
         inOrder.verify(skillVersionRepository).flush();
         inOrder.verify(skillVersionRepository, times(2)).save(any(SkillVersion.class));
+        inOrder.verify(skillRepository).save(skill);
     }
 
     @Test

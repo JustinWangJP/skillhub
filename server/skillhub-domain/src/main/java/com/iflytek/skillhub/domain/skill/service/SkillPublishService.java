@@ -564,6 +564,13 @@ public class SkillPublishService {
             throw new DomainBadRequestException("error.skill.version.exists", version.getVersion());
         }
 
+        // PostgreSQL prevents deleting a skill_version while skill.latest_version_id still references it.
+        if (version.getId().equals(skill.getLatestVersionId())) {
+            skill.setLatestVersionId(null);
+            skillRepository.save(skill);
+            skillRepository.flush();
+        }
+
         reviewTaskRepository.findBySkillVersionIdAndStatus(version.getId(), ReviewTaskStatus.PENDING)
                 .ifPresent(reviewTaskRepository::delete);
 
@@ -579,10 +586,6 @@ public class SkillPublishService {
         securityScanService.softDeleteByVersionId(version.getId());
         skillVersionRepository.delete(version);
         skillVersionRepository.flush();
-
-        if (version.getId().equals(skill.getLatestVersionId())) {
-            skill.setLatestVersionId(null);
-        }
     }
 
     private String resolveNamespaceSlug(Long namespaceId) {
