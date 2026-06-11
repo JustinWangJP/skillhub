@@ -17,6 +17,7 @@ import com.iflytek.skillhub.auth.rbac.PlatformPrincipal;
 import com.iflytek.skillhub.domain.namespace.NamespaceMemberRepository;
 import com.iflytek.skillhub.metrics.SkillHubMetrics;
 import com.iflytek.skillhub.security.AuthFailureThrottleService;
+import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -195,6 +196,61 @@ class LocalAuthControllerTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value(0));
+    }
+
+    @Test
+    void changePassword_withAuthentication_withInvalidCsrf_returnsForbidden() throws Exception {
+        PlatformPrincipal principal = new PlatformPrincipal(
+            "usr_3",
+            "carol",
+            "carol@example.com",
+            "",
+            "local",
+            Set.of("SUPER_ADMIN")
+        );
+        var auth = new UsernamePasswordAuthenticationToken(
+            principal,
+            null,
+            List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))
+        );
+
+        mockMvc.perform(post("/api/v1/auth/local/change-password")
+                .with(authentication(auth))
+                .with(csrf().useInvalidToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"currentPassword":"old","newPassword":"Newpass123!"}
+                    """))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void changePassword_withSessionCookieAndBearerHeaderWithoutCsrf_isRejected() throws Exception {
+        PlatformPrincipal principal = new PlatformPrincipal(
+            "usr_3",
+            "carol",
+            "carol@example.com",
+            "",
+            "local",
+            Set.of("SUPER_ADMIN")
+        );
+        var auth = new UsernamePasswordAuthenticationToken(
+            principal,
+            null,
+            List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))
+        );
+
+        mockMvc.perform(post("/api/v1/auth/local/change-password")
+                .with(authentication(auth))
+                .header("Authorization", "Bearer invalid-token")
+                .cookie(new Cookie("SESSION", "browser-session"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"currentPassword":"old","newPassword":"Newpass123!"}
+                    """))
+            .andExpect(status().isUnauthorized());
+
+        verify(localAuthService, never()).changePassword("usr_3", "old", "Newpass123!");
     }
 
     @Test

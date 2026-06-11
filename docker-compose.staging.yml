@@ -42,10 +42,16 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: admin@skillhub.local
       OAUTH2_GITHUB_CLIENT_ID: local-placeholder
       OAUTH2_GITHUB_CLIENT_SECRET: local-placeholder
+      SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET: staging-download-secret-32-bytes
+      SKILLHUB_SECURITY_SCANNER_ENABLED: "true"
+      SKILLHUB_SECURITY_SCANNER_URL: http://skill-scanner:8000
+      SKILLHUB_SECURITY_SCANNER_MODE: upload
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      skill-scanner:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]

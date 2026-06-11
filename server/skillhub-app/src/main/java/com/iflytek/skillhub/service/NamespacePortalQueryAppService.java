@@ -8,6 +8,7 @@ import com.iflytek.skillhub.domain.namespace.NamespaceRepository;
 import com.iflytek.skillhub.domain.namespace.NamespaceRole;
 import com.iflytek.skillhub.domain.namespace.NamespaceService;
 import com.iflytek.skillhub.domain.namespace.NamespaceStatus;
+import com.iflytek.skillhub.domain.namespace.NamespaceType;
 import com.iflytek.skillhub.domain.shared.exception.DomainForbiddenException;
 import com.iflytek.skillhub.domain.user.UserAccount;
 import com.iflytek.skillhub.domain.user.UserAccountRepository;
@@ -18,6 +19,7 @@ import com.iflytek.skillhub.dto.PageResponse;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
@@ -111,9 +113,16 @@ public class NamespacePortalQueryAppService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<MemberResponse> listMembers(String slug, Pageable pageable, String userId) {
+    public PageResponse<MemberResponse> listMembers(String slug, Pageable pageable, String userId, Set<String> platformRoles) {
         Namespace namespace = namespaceService.getNamespaceBySlug(slug);
-        namespaceService.assertMember(namespace.getId(), userId);
+        if (namespace.getType() == NamespaceType.GLOBAL) {
+            Set<String> roles = platformRoles != null ? platformRoles : Set.of();
+            if (!roles.contains("SUPER_ADMIN") && !roles.contains("USER_ADMIN")) {
+                throw new DomainForbiddenException("error.namespace.global.members.platformAdmin.required");
+            }
+        } else {
+            namespaceService.assertMember(namespace.getId(), userId);
+        }
         Page<NamespaceMember> members = namespaceMemberService.listMembers(namespace.getId(), pageable);
 
         List<String> memberUserIds = members.getContent().stream()

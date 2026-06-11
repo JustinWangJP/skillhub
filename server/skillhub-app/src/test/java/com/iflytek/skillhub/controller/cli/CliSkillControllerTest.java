@@ -118,6 +118,7 @@ class CliSkillControllerTest {
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .delete("/api/cli/v1/skills/global/demo")
+                        .header("Authorization", "Bearer test-token")
                         .with(authentication(auth)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.ok").value(true))

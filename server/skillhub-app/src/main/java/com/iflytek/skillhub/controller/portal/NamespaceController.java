@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Namespace portal endpoints for discovery, membership management, and
@@ -155,9 +156,13 @@ public class NamespaceController extends BaseApiController {
     @GetMapping("/namespaces/{slug}/members")
     public ApiResponse<PageResponse<MemberResponse>> listMembers(@PathVariable String slug,
                                                                  Pageable pageable,
-                                                                 @RequestAttribute("userId") String userId) {
+                                                                 @RequestAttribute("userId") String userId,
+                                                                 @AuthenticationPrincipal PlatformPrincipal principal) {
+        Set<String> platformRoles = principal != null && principal.platformRoles() != null
+                ? principal.platformRoles()
+                : Set.of();
         return ok("response.success.read",
-                namespacePortalQueryAppService.listMembers(slug, pageable, userId));
+                namespacePortalQueryAppService.listMembers(slug, pageable, userId, platformRoles));
     }
 
     @GetMapping("/namespaces/{slug}/member-candidates")

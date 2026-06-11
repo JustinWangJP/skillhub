@@ -5,6 +5,7 @@ import { InventoryStore } from '../stores/inventory-store'
 import { CliError } from '../shared/errors'
 import { EXIT } from '../shared/constants'
 import { extractZip } from '../platform/archive'
+import { readBoundedResponseBody } from '../platform/download'
 import { pathExists } from '../platform/paths'
 import type { AgentCandidate } from '../agents/types'
 
@@ -23,7 +24,7 @@ export async function installSkill(options: InstallOptions): Promise<{ installed
   const client = new SkillHubClient(options.registry, options.token)
   const resolved = await client.resolve(options.namespace, options.slug, options.version)
   const response = await client.download(options.namespace, options.slug, resolved.version)
-  const buffer = await response.arrayBuffer()
+  const buffer = await readBoundedResponseBody(response)
 
   const installed: Array<{ agent: string; dir: string }> = []
   const store = new InventoryStore(options.home)

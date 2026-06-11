@@ -58,6 +58,7 @@ services:
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       SKILLHUB_PUBLIC_BASE_URL: ${SKILLHUB_PUBLIC_BASE_URL:-}
       DEVICE_AUTH_VERIFICATION_URI: ${DEVICE_AUTH_VERIFICATION_URI:-}
+      SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET: ${SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET:?required}
       SKILLHUB_STORAGE_PROVIDER: ${SKILLHUB_STORAGE_PROVIDER:-s3}
       STORAGE_BASE_PATH: /var/lib/skillhub/storage
       SKILLHUB_STORAGE_S3_ENDPOINT: ${SKILLHUB_STORAGE_S3_ENDPOINT:-}
@@ -98,6 +99,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      skill-scanner:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]

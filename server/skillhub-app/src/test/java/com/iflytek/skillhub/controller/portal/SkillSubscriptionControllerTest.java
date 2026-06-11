@@ -59,7 +59,8 @@ class SkillSubscriptionControllerTest {
     @Test
     void subscribe_skill_returns_envelope() throws Exception {
         mockMvc.perform(put("/api/web/skills/10/subscription")
-                        .with(authentication(authenticatedUser())))
+                        .with(authentication(authenticatedUser()))
+                        .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.timestamp").isNotEmpty())
@@ -80,7 +81,8 @@ class SkillSubscriptionControllerTest {
     @Test
     void unsubscribe_skill_returns_envelope() throws Exception {
         mockMvc.perform(delete("/api/web/skills/10/subscription")
-                        .with(authentication(authenticatedUser())))
+                        .with(authentication(authenticatedUser()))
+                        .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.timestamp").isNotEmpty())

@@ -21,6 +21,13 @@ function installFetch(zipEntries: Record<string, string>): typeof fetch {
     Object.entries(zipEntries).map(([name, content]) => [name, new TextEncoder().encode(content)])
   ))
 
+  return installFetchWithDownloadResponse(new Response(
+    archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer,
+    { status: 200 }
+  ))
+}
+
+function installFetchWithDownloadResponse(downloadResponse: Response): typeof fetch {
   const fakeFetch = async (input: URL | RequestInfo) => {
     const path = new URL(String(input)).pathname
     if (path.endsWith('/resolve')) {
@@ -37,8 +44,7 @@ function installFetch(zipEntries: Record<string, string>): typeof fetch {
       })
     }
     if (path.endsWith('/download')) {
-      const body = archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer
-      return new Response(body, { status: 200 })
+      return downloadResponse.clone()
     }
     return Response.json({ code: 404 }, { status: 404 })
   }
@@ -124,5 +130,21 @@ describe('installSkill', () => {
     expect(inventory.items[0]).toMatchObject({ namespace: 'team', slug: 'demo' })
     expect(inventory.items[0].targets).toHaveLength(1)
     expect(inventory.items[0].targets[0].installDir).toBe(skillDir)
+  })
+
+  test('rejects downloads whose content-length exceeds the package limit', async () => {
+    globalThis.fetch = installFetchWithDownloadResponse(new Response(new Uint8Array(0), {
+      status: 200,
+      headers: { 'Content-Length': String(100 * 1024 * 1024 + 1) }
+    }))
+    const rootDir = await mkdtemp(join(tmpdir(), 'skillhub-install-root-'))
+
+    await expect(installSkill({
+      registry: 'http://registry.test',
+      namespace: 'global',
+      slug: 'demo',
+      targets: [{ agent: 'codex', rootDir, scope: 'project', source: 'explicit' }],
+      force: false
+    })).rejects.toThrow('download exceeds maximum package size')
   })
 })

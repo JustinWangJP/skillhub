@@ -95,7 +95,7 @@ class NamespaceWorkflowContractTest {
                 .willReturn(List.of(new NamespaceCandidateUserResponse("user-admin", "Admin", "admin@example.com", "ACTIVE")));
         given(namespacePortalCommandAppService.addMember("team-flow", "user-admin", NamespaceRole.ADMIN, "owner-1"))
                 .willReturn(adminMemberResponse);
-        given(namespacePortalQueryAppService.listMembers(eq("team-flow"), any(org.springframework.data.domain.Pageable.class), eq("owner-1")))
+        given(namespacePortalQueryAppService.listMembers(eq("team-flow"), any(org.springframework.data.domain.Pageable.class), eq("owner-1"), eq(Set.of())))
                 .willReturn(new PageResponse<>(List.of(adminMemberResponse), 1, 0, 20));
         given(namespacePortalCommandAppService.updateMemberRole(eq("team-flow"), eq("user-admin"), any(), eq("owner-1")))
                 .willReturn(adminMemberResponse);

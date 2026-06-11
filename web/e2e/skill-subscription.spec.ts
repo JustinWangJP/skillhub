@@ -16,6 +16,8 @@ function adminCredentials() {
 }
 
 test.describe('Skill Subscription (Real API)', () => {
+  test.describe.configure({ timeout: 150_000 })
+
   test.beforeEach(async ({ page }, testInfo) => {
     await setEnglishLocale(page)
     await registerSession(page, testInfo)

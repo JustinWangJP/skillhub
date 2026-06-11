@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "skillhub.security.scanner")
 public class SkillScannerProperties {
 
-    private boolean enabled = false;
+    private boolean enabled = true;
     private String baseUrl = "http://localhost:8000";
     private String healthPath = "/health";
     private String scanPath = "/scan-upload";

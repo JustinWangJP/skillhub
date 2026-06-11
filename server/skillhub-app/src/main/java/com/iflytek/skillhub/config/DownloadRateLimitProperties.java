@@ -10,7 +10,7 @@ public class DownloadRateLimitProperties {
 
     private String anonymousCookieName = "skillhub_anon_dl";
     private Duration anonymousCookieMaxAge = Duration.ofDays(30);
-    private String anonymousCookieSecret = "change-me-in-production";
+    private String anonymousCookieSecret;
 
     public String getAnonymousCookieName() {
         return anonymousCookieName;

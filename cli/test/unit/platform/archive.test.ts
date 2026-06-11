@@ -56,4 +56,32 @@ describe('archive helpers', () => {
     const entries = await readdir(target)
     expect(entries).toEqual([])
   })
+
+  test('rejects zip archives with more than 500 entries before extraction', async () => {
+    const target = await mkdtemp(join(tmpdir(), 'skillhub-archive-many-'))
+    const manyEntries = Object.fromEntries(
+      Array.from({ length: 501 }, (_, index) => [`file-${index}.txt`, new Uint8Array(0)])
+    )
+    const archive = zipSync(manyEntries)
+
+    await expect(extractZip(archive.buffer as ArrayBuffer, target)).rejects.toThrow('zip entry count exceeds limit')
+  })
+
+  test('rejects zip entries larger than 10 MiB before extraction', async () => {
+    const target = await mkdtemp(join(tmpdir(), 'skillhub-archive-large-file-'))
+    const archive = zipSync({ 'large.bin': new Uint8Array(10 * 1024 * 1024 + 1) })
+
+    await expect(extractZip(archive.buffer as ArrayBuffer, target)).rejects.toThrow('zip entry size exceeds limit')
+  })
+
+  test('rejects zip archives larger than 100 MiB after decompression before extraction', async () => {
+    const target = await mkdtemp(join(tmpdir(), 'skillhub-archive-large-total-'))
+    const oneMiB = new Uint8Array(1024 * 1024)
+    const entries = Object.fromEntries(
+      Array.from({ length: 101 }, (_, index) => [`file-${index}.bin`, oneMiB])
+    )
+    const archive = zipSync(entries)
+
+    await expect(extractZip(archive.buffer as ArrayBuffer, target)).rejects.toThrow('zip total uncompressed size exceeds limit')
+  })
 })

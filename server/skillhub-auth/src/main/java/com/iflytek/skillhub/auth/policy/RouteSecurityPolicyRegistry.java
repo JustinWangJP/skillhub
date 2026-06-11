@@ -150,14 +150,22 @@ public class RouteSecurityPolicyRegistry {
         return ApiTokenAuthorizationDecision.unsupported(path);
     }
 
-    public boolean shouldIgnoreCsrf(String path, String authorizationHeader) {
-        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+    public boolean shouldIgnoreCsrf(String method, String path, String authorizationHeader) {
+        return shouldIgnoreCsrf(method, path, authorizationHeader, false);
+    }
+
+    public boolean shouldIgnoreCsrf(String method, String path, String authorizationHeader, boolean hasSessionCookie) {
+        if (!hasSessionCookie && authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             return true;
         }
         if (path == null) {
             return false;
         }
-        return path.startsWith("/api/");
+        if (!"POST".equalsIgnoreCase(method)) {
+            return false;
+        }
+        return "/api/v1/auth/device/code".equals(path)
+                || "/api/v1/auth/device/token".equals(path);
     }
 
     public boolean shouldProjectRequestContext(String path) {

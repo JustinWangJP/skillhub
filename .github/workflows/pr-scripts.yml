@@ -4,10 +4,13 @@ on:
   pull_request:
     paths:
       - 'scripts/**'
+      - 'Makefile'
+      - '.github/workflows/security.yml'
       - '.github/workflows/pr-scripts.yml'
 
 jobs:
-  publish-cli-test:
+  scripts-tests:
+    name: Script Regression Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,3 +20,6 @@ jobs:
         with:
           node-version: '21'
       - run: bash scripts/tests/publish-cli-test.sh
+      - run: bash scripts/tests/validate-release-config-test.sh
+      - run: bash scripts/tests/dev-web-host-test.sh
+      - run: bash scripts/tests/workflow-security-test.sh

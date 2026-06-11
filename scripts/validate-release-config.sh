@@ -97,9 +97,25 @@ validate_port() {
   esac
 }
 
+validate_min_length() {
+  var_name="$1"
+  min_length="$2"
+  eval "var_value=\${$var_name:-}"
+  if [ -z "$var_value" ]; then
+    return 0
+  fi
+  if [ "${#var_value}" -lt "$min_length" ]; then
+    error "$var_name must be at least $min_length characters"
+  fi
+}
+
 require_non_empty SKILLHUB_PUBLIC_BASE_URL
 validate_url SKILLHUB_PUBLIC_BASE_URL
 validate_no_trailing_slash SKILLHUB_PUBLIC_BASE_URL
+
+require_non_empty SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET
+reject_values SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET "change-me-in-production" "replace-me" "replace-with-random-download-secret-32-bytes"
+validate_min_length SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET 32
 
 reject_values POSTGRES_PASSWORD "change-this-postgres-password" "skillhub_demo" "skillhub_dev"
 reject_values BOOTSTRAP_ADMIN_PASSWORD "replace-this-admin-password" "ChangeMe!2026" "Admin@2026"

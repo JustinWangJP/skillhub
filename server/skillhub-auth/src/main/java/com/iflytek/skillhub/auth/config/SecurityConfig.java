@@ -9,6 +9,8 @@ import com.iflytek.skillhub.auth.mock.MockAuthFilter;
 import com.iflytek.skillhub.auth.policy.RouteSecurityPolicyRegistry;
 import com.iflytek.skillhub.auth.token.ApiTokenAuthenticationFilter;
 import com.iflytek.skillhub.auth.token.ApiTokenScopeFilter;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -103,7 +105,7 @@ public class SecurityConfig {
         RequestMatcher csrfIgnoreMatcher = request -> {
             String path = request.getRequestURI();
             String authorization = request.getHeader("Authorization");
-            return routeSecurityPolicyRegistry.shouldIgnoreCsrf(path, authorization);
+            return routeSecurityPolicyRegistry.shouldIgnoreCsrf(request.getMethod(), path, authorization, hasSessionCookie(request));
         };
 
         http
@@ -182,5 +184,21 @@ public class SecurityConfig {
                 case ROLE_PROTECTED -> auth.requestMatchers(policy.toRequestMatcher()).hasAnyRole(policy.roles());
             }
         }
+    }
+
+    static boolean hasSessionCookie(HttpServletRequest request) {
+        if (request.getRequestedSessionId() != null) {
+            return true;
+        }
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return false;
+        }
+        for (Cookie cookie : cookies) {
+            if ("SESSION".equals(cookie.getName()) || "JSESSIONID".equals(cookie.getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -144,7 +144,7 @@ skillhub:
     download:
       anonymous-cookie-name: ${SKILLHUB_DOWNLOAD_ANON_COOKIE_NAME:skillhub_anon_dl}
       anonymous-cookie-max-age: ${SKILLHUB_DOWNLOAD_ANON_COOKIE_MAX_AGE:P30D}
-      anonymous-cookie-secret: ${SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET:change-me-in-production}
+      anonymous-cookie-secret: ${SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET:}
   publish:
     max-file-count: 100
     max-single-file-size: 10485760 # 10MB
@@ -166,7 +166,7 @@ skillhub:
     verification-uri: ${DEVICE_AUTH_VERIFICATION_URI:${skillhub.public.base-url:}/cli/auth}
   security:
     scanner:
-      enabled: ${SKILLHUB_SECURITY_SCANNER_ENABLED:false}
+      enabled: ${SKILLHUB_SECURITY_SCANNER_ENABLED:true}
       base-url: ${SKILLHUB_SECURITY_SCANNER_URL:http://localhost:8000}
       health-path: /health
       scan-path: /scan-upload

@@ -9938,6 +9938,8 @@ export interface operations {
                 page?: number;
                 size?: number;
                 filter?: string;
+                q?: string;
+                namespace?: string;
             };
             header?: never;
             path?: never;
@@ -9962,6 +9964,8 @@ export interface operations {
                 page?: number;
                 size?: number;
                 filter?: string;
+                q?: string;
+                namespace?: string;
             };
             header?: never;
             path?: never;
