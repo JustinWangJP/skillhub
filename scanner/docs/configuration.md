@@ -18,7 +18,7 @@ skillhub:
   security:
     scanner:
       # 基础配置
-      enabled: ${SKILLHUB_SECURITY_SCANNER_ENABLED:false}
+      enabled: ${SKILLHUB_SECURITY_SCANNER_ENABLED:true}
       base-url: ${SKILLHUB_SECURITY_SCANNER_URL:http://localhost:8000}
       mode: ${SKILLHUB_SECURITY_SCANNER_MODE:local}
 
@@ -48,20 +48,20 @@ skillhub:
 #### `enabled`
 
 - **类型**：Boolean
-- **默认值**：`false`
+- **默认值**：`true`
 - **环境变量**：`SKILLHUB_SECURITY_SCANNER_ENABLED`
 - **说明**：是否启用安全扫描功能
 - **影响**：
   - `true`：技能包发布时会触发安全扫描
-  - `false`：跳过安全扫描，直接进入审核流程
+  - `false`：仅允许 `PRIVATE` 技能跳过扫描；`PUBLIC` / `NAMESPACE_ONLY` 发布会失败并提示必须启用 Scanner
 
 **示例**：
 
 ```yaml
-# 开发环境：禁用扫描
+# 仅本地私有技能调试：禁用扫描
 enabled: false
 
-# 生产环境：启用扫描
+# 公共或命名空间可见发布：启用扫描
 enabled: true
 ```
 
@@ -103,8 +103,8 @@ base-url: https://scanner.example.com
 **示例**：
 
 ```yaml
-# Docker Compose 环境（共享卷）
-mode: local
+# Docker Compose 环境（Scanner 独立容器，无共享发布目录）
+mode: upload
 
 # Kubernetes 环境（独立 Pod）
 mode: upload
@@ -298,7 +298,7 @@ services:
     environment:
       - SKILLHUB_SECURITY_SCANNER_ENABLED=true
       - SKILLHUB_SECURITY_SCANNER_URL=http://skill-scanner:8000
-      - SKILLHUB_SECURITY_SCANNER_MODE=local
+      - SKILLHUB_SECURITY_SCANNER_MODE=upload
       - SKILLHUB_SCANNER_USE_BEHAVIORAL=false
       - SKILLHUB_SCANNER_USE_LLM=false
       - SKILLHUB_SCANNER_USE_META=true
@@ -348,9 +348,9 @@ stringData:
 skillhub:
   security:
     scanner:
-      enabled: false  # 开发时禁用扫描，加快迭代速度
+      enabled: true  # 默认启用；PUBLIC/NAMESPACE_ONLY 发布依赖扫描
       base-url: http://localhost:8000
-      mode: local
+      mode: upload
       analyzers:
         meta: true  # 只启用元数据分析
       policy:
@@ -366,7 +366,7 @@ skillhub:
     scanner:
       enabled: true  # 测试环境启用扫描
       base-url: http://skill-scanner:8000
-      mode: local
+      mode: upload
       analyzers:
         behavioral: true
         meta: true

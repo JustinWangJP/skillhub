@@ -18,6 +18,8 @@ function escapeRegExp(value: string) {
 let seeded: PreparedSearchSeed | undefined
 
 test.describe('Public Skill Detail Anonymous Access (Real API)', () => {
+  test.describe.configure({ timeout: 150_000 })
+
   test.beforeAll(async ({ browser }, testInfo) => {
     seeded = await prepareSearchSeed(browser, testInfo, { count: 1 })
   })

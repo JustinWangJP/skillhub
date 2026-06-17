@@ -136,7 +136,7 @@ class SkillStarControllerTest {
     }
 
     @Test
-    void apiWebStarSkillWithoutCsrfShouldAllowSessionAuth() throws Exception {
+    void apiWebStarSkillWithCsrfShouldAllowSessionAuth() throws Exception {
         PlatformPrincipal principal = new PlatformPrincipal(
                 "user-42",
                 "tester",
@@ -152,7 +152,8 @@ class SkillStarControllerTest {
         );
 
         mockMvc.perform(put("/api/web/skills/10/star")
-                        .with(authentication(auth)))
+                        .with(authentication(auth))
+                        .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
 

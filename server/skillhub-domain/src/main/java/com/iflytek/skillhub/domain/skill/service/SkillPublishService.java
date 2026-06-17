@@ -170,6 +170,9 @@ public class SkillPublishService {
                 errors.add("Publisher is not a member of namespace: " + namespaceSlug);
             }
         }
+        if (requiresSecurityScanner(visibility) && !securityScanService.isEnabled()) {
+            errors.add("error.security.scanner.required");
+        }
 
         // 3. Package validation
         ValidationResult packageValidation = skillPackageValidator.validate(entries);
@@ -380,6 +383,9 @@ public class SkillPublishService {
                     "error.skill.publish.precheck.confirmRequired",
                     formatValidationMessages(publishWarnings));
         }
+        if (requiresSecurityScanner(visibility) && !securityScanService.isEnabled()) {
+            throw new DomainBadRequestException("error.security.scanner.required");
+        }
 
         // 6. Find or create Skill record (with owner isolation)
         List<Skill> existingSkills = skillRepository.findByNamespaceIdAndSlug(namespace.getId(), skillSlug);
@@ -586,6 +592,10 @@ public class SkillPublishService {
         securityScanService.softDeleteByVersionId(version.getId());
         skillVersionRepository.delete(version);
         skillVersionRepository.flush();
+    }
+
+    private boolean requiresSecurityScanner(SkillVisibility visibility) {
+        return visibility == SkillVisibility.PUBLIC || visibility == SkillVisibility.NAMESPACE_ONLY;
     }
 
     private String resolveNamespaceSlug(Long namespaceId) {

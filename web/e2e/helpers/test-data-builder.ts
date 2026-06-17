@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import type { APIRequestContext, Page, TestInfo } from '@playwright/test'
+import { csrfHeaders } from './csrf'
 
 type CleanupTask = () => Promise<void>
 
@@ -237,12 +238,14 @@ export class E2eTestDataBuilder {
           displayName,
           description: `E2E namespace ${slug}`,
         },
+        headers: await csrfHeaders(this.page),
       }),
     )
 
     this.cleanupTasks.push(async () => {
       await this.request.post(`/api/web/namespaces/${encodeURIComponent(created.slug)}/archive`, {
         data: { reason: 'e2e cleanup' },
+        headers: await csrfHeaders(this.page),
       })
     })
 
@@ -270,13 +273,17 @@ export class E2eTestDataBuilder {
 
     if (namespace.status === 'FROZEN' && namespace.canUnfreeze) {
       return parseEnvelope<SeededNamespace>(
-        await this.request.post(`/api/web/namespaces/${encodeURIComponent(namespace.slug)}/unfreeze`),
+        await this.request.post(`/api/web/namespaces/${encodeURIComponent(namespace.slug)}/unfreeze`, {
+          headers: await csrfHeaders(this.page),
+        }),
       )
     }
 
     if (namespace.status === 'ARCHIVED' && namespace.canRestore) {
       return parseEnvelope<SeededNamespace>(
-        await this.request.post(`/api/web/namespaces/${encodeURIComponent(namespace.slug)}/restore`),
+        await this.request.post(`/api/web/namespaces/${encodeURIComponent(namespace.slug)}/restore`, {
+          headers: await csrfHeaders(this.page),
+        }),
       )
     }
 
@@ -483,11 +490,12 @@ export class E2eTestDataBuilder {
 
   async approveReview(reviewTaskId: number, comment = 'Approved by Playwright E2E'): Promise<void> {
     let lastError: unknown
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
       try {
         await parseEnvelope<ReviewTaskSummary>(
           await this.request.post(`/api/web/reviews/${reviewTaskId}/approve`, {
             data: { comment },
+            headers: await csrfHeaders(this.page),
           }),
         )
         return
@@ -498,7 +506,7 @@ export class E2eTestDataBuilder {
         if (!isScanInProgress) {
           throw error
         }
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, 1_000))
       }
     }
     throw lastError instanceof Error ? lastError : new Error('approveReview timed out')
@@ -515,6 +523,7 @@ export class E2eTestDataBuilder {
     await parseEnvelope<{ userId: string; role: string }>(
       await this.request.post(`/api/web/namespaces/${encodeURIComponent(slug)}/members`, {
         data: { userId, role },
+        headers: await csrfHeaders(this.page),
       }),
     )
   }
@@ -533,11 +542,14 @@ export class E2eTestDataBuilder {
           },
           visibility: 'PUBLIC',
         },
+        headers: await csrfHeaders(this.page),
       }),
     )
 
     this.cleanupTasks.push(async () => {
-      await this.request.delete(`/api/web/skills/${encodeURIComponent(result.namespace)}/${encodeURIComponent(result.slug)}`)
+      await this.request.delete(`/api/web/skills/${encodeURIComponent(result.namespace)}/${encodeURIComponent(result.slug)}`, {
+        headers: await csrfHeaders(this.page),
+      })
     })
 
     return result

@@ -14,19 +14,31 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SkillScannerPropertiesBindingTest {
 
     @Test
-    void defaultConfig_disablesScannerByDefault() throws IOException {
+    void defaultConfig_enablesScannerByDefault() throws IOException {
         SkillScannerProperties properties = bindProperties(
                 List.of("application.yml"),
                 Map.of()
         );
 
-        assertFalse(properties.isEnabled());
+        assertTrue(properties.isEnabled());
         assertEquals("local", properties.getMode());
+        assertEquals("http://localhost:8000", properties.getBaseUrl());
+    }
+
+    @Test
+    void localConfig_usesUploadScannerModeByDefault() throws IOException {
+        SkillScannerProperties properties = bindProperties(
+                List.of("application-local.yml", "application.yml"),
+                Map.of()
+        );
+
+        assertTrue(properties.isEnabled());
+        assertEquals("upload", properties.getMode());
         assertEquals("http://localhost:8000", properties.getBaseUrl());
     }
 

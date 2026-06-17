@@ -55,6 +55,7 @@ class CliDryRunValidateTest {
 
         mockMvc.perform(multipart("/api/cli/v1/skills/global/publish/validate")
                         .file(file)
+                        .header("Authorization", "Bearer test-token")
                         .with(authentication(auth())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.valid").value(true))
@@ -75,6 +76,7 @@ class CliDryRunValidateTest {
 
         mockMvc.perform(multipart("/api/cli/v1/skills/global/publish/validate")
                         .file(file)
+                        .header("Authorization", "Bearer test-token")
                         .with(authentication(auth())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.valid").value(false))
@@ -95,6 +97,7 @@ class CliDryRunValidateTest {
         mockMvc.perform(multipart("/api/cli/v1/skills/global/publish/validate")
                         .file(file)
                         .file(new MockMultipartFile("visibility", "", "text/plain", "PRIVATE".getBytes()))
+                        .header("Authorization", "Bearer test-token")
                         .with(authentication(auth())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.valid").value(true));
@@ -108,6 +111,7 @@ class CliDryRunValidateTest {
         mockMvc.perform(multipart("/api/cli/v1/skills/global/publish/validate")
                         .file(file)
                         .file(new MockMultipartFile("visibility", "", "text/plain", "BOGUS".getBytes()))
+                        .header("Authorization", "Bearer test-token")
                         .with(authentication(auth())))
                 .andExpect(status().isBadRequest());
     }

@@ -101,7 +101,7 @@ class SkillPublishServiceTest {
                 eventPublisher,
                 CLOCK
         );
-        lenient().when(securityScanService.isEnabled()).thenReturn(false);
+        lenient().when(securityScanService.isEnabled()).thenReturn(true);
         lenient().when(skillVersionRepository.findBySkillIdAndStatus(anyLong(), eq(SkillVersionStatus.PENDING_REVIEW)))
                 .thenReturn(List.of());
         lenient().when(reviewTaskRepository.save(any(ReviewTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -1285,6 +1285,120 @@ class SkillPublishServiceTest {
     }
 
     @Test
+    void testPublishFromEntries_PublicWhenScannerDisabled_ShouldRejectBeforeSideEffects() throws Exception {
+        String namespaceSlug = "test-ns";
+        String publisherId = "user-100";
+        PublishFixture fixture = stubValidPublishInputs(namespaceSlug, publisherId, "test-skill", "test-skill", "1.0.0", true);
+        when(securityScanService.isEnabled()).thenReturn(false);
+
+        DomainBadRequestException exception = assertThrows(DomainBadRequestException.class, () -> service.publishFromEntries(
+                namespaceSlug,
+                fixture.entries(),
+                publisherId,
+                SkillVisibility.PUBLIC,
+                Set.of()
+        ));
+
+        assertEquals("error.security.scanner.required", exception.messageCode());
+        verify(skillRepository, never()).findByNamespaceIdAndSlug(anyLong(), anyString());
+        verify(skillRepository, never()).save(any(Skill.class));
+        verify(skillVersionRepository, never()).save(any(SkillVersion.class));
+        verify(objectStorageService, never()).putObject(anyString(), any(), anyLong(), anyString());
+        verify(reviewTaskRepository, never()).save(any(ReviewTask.class));
+    }
+
+    @Test
+    void testPublishFromEntries_NamespaceOnlyWhenScannerDisabled_ShouldRejectBeforeSideEffects() throws Exception {
+        String namespaceSlug = "test-ns";
+        String publisherId = "user-100";
+        PublishFixture fixture = stubValidPublishInputs(namespaceSlug, publisherId, "team-skill", "team-skill", "1.0.0", true);
+        when(securityScanService.isEnabled()).thenReturn(false);
+
+        DomainBadRequestException exception = assertThrows(DomainBadRequestException.class, () -> service.publishFromEntries(
+                namespaceSlug,
+                fixture.entries(),
+                publisherId,
+                SkillVisibility.NAMESPACE_ONLY,
+                Set.of()
+        ));
+
+        assertEquals("error.security.scanner.required", exception.messageCode());
+        verify(skillRepository, never()).findByNamespaceIdAndSlug(anyLong(), anyString());
+        verify(skillRepository, never()).save(any(Skill.class));
+        verify(skillVersionRepository, never()).save(any(SkillVersion.class));
+        verify(objectStorageService, never()).putObject(anyString(), any(), anyLong(), anyString());
+        verify(reviewTaskRepository, never()).save(any(ReviewTask.class));
+    }
+
+    @Test
+    void testPublishFromEntries_PrivateWhenScannerDisabled_ShouldAllowUploadWithoutScan() throws Exception {
+        String namespaceSlug = "test-ns";
+        String publisherId = "user-100";
+        PublishFixture fixture = stubValidPublishInputs(namespaceSlug, publisherId, "private-skill", "private-skill", "1.0.0", true);
+        when(securityScanService.isEnabled()).thenReturn(false);
+
+        SkillPublishService.PublishResult result = service.publishFromEntries(
+                namespaceSlug,
+                fixture.entries(),
+                publisherId,
+                SkillVisibility.PRIVATE,
+                Set.of()
+        );
+
+        assertEquals(SkillVersionStatus.UPLOADED, result.version().getStatus());
+        verify(securityScanService, never()).triggerScan(anyLong(), anyList(), anyString());
+        verify(reviewTaskRepository, never()).save(any(ReviewTask.class));
+    }
+
+    @Test
+    void testPublishFromEntries_SuperAdminPublicWhenScannerDisabled_ShouldStillRejectBeforeAutoPublish() throws Exception {
+        String namespaceSlug = "test-ns";
+        String publisherId = "admin-user";
+        PublishFixture fixture = stubValidPublishInputs(namespaceSlug, publisherId, "admin-skill", "admin-skill", "1.0.0", false);
+        when(securityScanService.isEnabled()).thenReturn(false);
+
+        DomainBadRequestException exception = assertThrows(DomainBadRequestException.class, () -> service.publishFromEntries(
+                namespaceSlug,
+                fixture.entries(),
+                publisherId,
+                SkillVisibility.PUBLIC,
+                Set.of("SUPER_ADMIN")
+        ));
+
+        assertEquals("error.security.scanner.required", exception.messageCode());
+        verify(skillVersionRepository, never()).save(any(SkillVersion.class));
+        verify(eventPublisher, never()).publishEvent(any(SkillPublishedEvent.class));
+    }
+
+    @Test
+    void testValidateOnly_PublicWhenScannerDisabled_ShouldReturnScannerRequiredError() throws Exception {
+        String namespaceSlug = "test-ns";
+        String publisherId = "user-100";
+        List<PackageEntry> entries = skillEntries("test-skill", "1.0.0");
+        Namespace namespace = new Namespace(namespaceSlug, "Test NS", "user-1");
+        setId(namespace, 1L);
+        NamespaceMember member = mock(NamespaceMember.class);
+        SkillMetadata metadata = new SkillMetadata("test-skill", "Test", "1.0.0", "Body", Map.of());
+        when(securityScanService.isEnabled()).thenReturn(false);
+        when(namespaceRepository.findBySlug(namespaceSlug)).thenReturn(Optional.of(namespace));
+        when(namespaceMemberRepository.findByNamespaceIdAndUserId(any(), eq(publisherId))).thenReturn(Optional.of(member));
+        when(skillPackageValidator.validate(entries)).thenReturn(ValidationResult.pass());
+        when(skillMetadataParser.parse(anyString())).thenReturn(metadata);
+        when(prePublishValidator.validate(any())).thenReturn(ValidationResult.pass());
+
+        SkillPublishService.DryRunResult result = service.validateOnly(
+                namespaceSlug,
+                entries,
+                publisherId,
+                SkillVisibility.PUBLIC,
+                Set.of()
+        );
+
+        assertFalse(result.valid());
+        assertTrue(result.errors().contains("error.security.scanner.required"));
+    }
+
+    @Test
     void testPublishFromEntries_WhenScannerEnabled_ShouldCreateReviewTaskAndTriggerScan() throws Exception {
         String namespaceSlug = "test-ns";
         String publisherId = "user-100";
@@ -1375,6 +1489,56 @@ class SkillPublishServiceTest {
         assertEquals(SkillVersionStatus.PUBLISHED, result.version().getStatus());
         verify(securityScanService).triggerScan(eq(10L), anyList(), eq(publisherId));
         verify(reviewTaskRepository, never()).save(any(ReviewTask.class));
+    }
+
+    private record PublishFixture(List<PackageEntry> entries) {
+    }
+
+    private PublishFixture stubValidPublishInputs(
+            String namespaceSlug,
+            String publisherId,
+            String skillName,
+            String skillSlug,
+            String version,
+            boolean stubMembership) throws Exception {
+        List<PackageEntry> entries = skillEntries(skillName, version);
+        Namespace namespace = new Namespace(namespaceSlug, "Test NS", "user-1");
+        setId(namespace, 1L);
+        SkillMetadata metadata = new SkillMetadata(skillName, "Test", version, "Body", Map.of());
+        Skill skill = new Skill(namespace.getId(), skillSlug, publisherId, SkillVisibility.PUBLIC);
+        setId(skill, 1L);
+
+        when(namespaceRepository.findBySlug(namespaceSlug)).thenReturn(Optional.of(namespace));
+        if (stubMembership) {
+            NamespaceMember member = mock(NamespaceMember.class);
+            when(namespaceMemberRepository.findByNamespaceIdAndUserId(any(), eq(publisherId))).thenReturn(Optional.of(member));
+        }
+        when(skillPackageValidator.validate(entries)).thenReturn(ValidationResult.pass());
+        when(skillMetadataParser.parse(anyString())).thenReturn(metadata);
+        when(prePublishValidator.validate(any())).thenReturn(ValidationResult.pass());
+        lenient().when(skillRepository.findByNamespaceIdAndSlug(namespace.getId(), skillSlug)).thenReturn(List.of(skill));
+        lenient().when(skillRepository.findByNamespaceIdAndSlugAndOwnerId(namespace.getId(), skillSlug, publisherId)).thenReturn(Optional.of(skill));
+        lenient().when(skillVersionRepository.findBySkillIdAndVersion(skill.getId(), version)).thenReturn(Optional.empty());
+        lenient().when(skillVersionRepository.save(any(SkillVersion.class))).thenAnswer(invocation -> {
+            SkillVersion saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                setId(saved, 10L);
+            }
+            return saved;
+        });
+        lenient().when(skillRepository.save(any(Skill.class))).thenReturn(skill);
+        return new PublishFixture(entries);
+    }
+
+    private List<PackageEntry> skillEntries(String skillName, String version) {
+        String skillMdContent = "---\nname: " + skillName + "\ndescription: Test\nversion: " + version + "\n---\nBody";
+        PackageEntry skillMd = new PackageEntry(
+                "SKILL.md",
+                skillMdContent.getBytes(StandardCharsets.UTF_8),
+                skillMdContent.getBytes(StandardCharsets.UTF_8).length,
+                "text/markdown");
+        PackageEntry readme = new PackageEntry("README.md", "content".getBytes(StandardCharsets.UTF_8), 7, "text/markdown");
+        return List.of(skillMd, readme);
     }
 
     private void setId(Object entity, Long id) throws Exception {

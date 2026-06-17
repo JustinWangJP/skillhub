@@ -6,6 +6,7 @@ import com.iflytek.skillhub.domain.namespace.NamespaceRepository;
 import com.iflytek.skillhub.domain.namespace.NamespaceRole;
 import com.iflytek.skillhub.domain.namespace.NamespaceType;
 import com.iflytek.skillhub.domain.shared.exception.DomainBadRequestException;
+import com.iflytek.skillhub.domain.shared.exception.DomainForbiddenException;
 import com.iflytek.skillhub.domain.skill.*;
 import com.iflytek.skillhub.storage.ObjectMetadata;
 import com.iflytek.skillhub.storage.ObjectStorageService;
@@ -349,6 +350,33 @@ class SkillDownloadServiceTest {
         verify(skillRepository).incrementDownloadCount(1L);
         verify(skillVersionStatsRepository).incrementDownloadCount(10L, 1L);
         verify(eventPublisher).publishEvent(any(SkillDownloadedEvent.class));
+    }
+
+    @Test
+    void testDownloadVersion_RejectsAnonymousPendingReviewPublicSkill() throws Exception {
+        Namespace namespace = new Namespace("global", "Global", "system");
+        setId(namespace, 1L);
+        namespace.setType(NamespaceType.GLOBAL);
+
+        Skill skill = new Skill(1L, "demo-skill", "owner-1", SkillVisibility.PUBLIC);
+        setId(skill, 1L);
+        skill.setStatus(SkillStatus.ACTIVE);
+        skill.setLatestVersionId(10L);
+
+        SkillVersion version = new SkillVersion(1L, "1.1.0", "owner-1");
+        setId(version, 11L);
+        version.setStatus(SkillVersionStatus.PENDING_REVIEW);
+
+        when(namespaceRepository.findBySlug("global")).thenReturn(Optional.of(namespace));
+        when(skillRepository.findByNamespaceIdAndSlug(1L, "demo-skill")).thenReturn(List.of(skill));
+        when(visibilityChecker.canAccess(skill, null, Map.of())).thenReturn(true);
+        when(skillVersionRepository.findBySkillIdAndVersion(1L, "1.1.0")).thenReturn(Optional.of(version));
+
+        assertThrows(DomainForbiddenException.class, () ->
+                service.downloadVersion("global", "demo-skill", "1.1.0", null, Map.of()));
+        verify(skillRepository, never()).incrementDownloadCount(anyLong());
+        verify(skillVersionStatsRepository, never()).incrementDownloadCount(anyLong(), anyLong());
+        verify(eventPublisher, never()).publishEvent(any(SkillDownloadedEvent.class));
     }
 
     private void setId(Object entity, Long id) throws Exception {

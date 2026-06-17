@@ -175,6 +175,41 @@ class NamespacePortalControllerTest {
     }
 
     @Test
+    void listMembers_globalNamespaceRejectsRegularUsers() throws Exception {
+        Namespace namespace = namespace(1L, "global", NamespaceStatus.ACTIVE, NamespaceType.GLOBAL);
+        given(namespaceService.getNamespaceBySlug("global")).willReturn(namespace);
+        given(namespaceMemberService.listMembers(eq(1L), any()))
+                .willReturn(new org.springframework.data.domain.PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get("/api/v1/namespaces/global/members")
+                        .with(auth("regular-1"))
+                        .requestAttr("userId", "regular-1"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    void listMembers_globalNamespaceAllowsUserAdminWithoutMembership() throws Exception {
+        Namespace namespace = namespace(1L, "global", NamespaceStatus.ACTIVE, NamespaceType.GLOBAL);
+        NamespaceMember member = new NamespaceMember(1L, "user-2", NamespaceRole.MEMBER);
+        UserAccount user = new UserAccount("user-2", "Alice", "alice@example.com", null);
+        given(namespaceService.getNamespaceBySlug("global")).willReturn(namespace);
+        doThrow(new DomainForbiddenException("error.namespace.membership.required"))
+                .when(namespaceService).assertMember(1L, "user-admin-1");
+        given(namespaceMemberService.listMembers(eq(1L), any()))
+                .willReturn(new org.springframework.data.domain.PageImpl<>(List.of(member), org.springframework.data.domain.PageRequest.of(0, 20), 1));
+        given(userAccountRepository.findByIdIn(List.of("user-2"))).willReturn(List.of(user));
+
+        mockMvc.perform(get("/api/v1/namespaces/global/members")
+                        .with(auth("user-admin-1", Set.of("USER_ADMIN")))
+                        .requestAttr("userId", "user-admin-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.items[0].userId").value("user-2"))
+                .andExpect(jsonPath("$.data.items[0].email").value("alice@example.com"));
+    }
+
+    @Test
     void searchMemberCandidates_returnsCandidates() throws Exception {
         Namespace namespace = namespace(1L, "team-a", NamespaceStatus.ACTIVE, NamespaceType.TEAM);
         given(namespaceService.getNamespaceBySlug("team-a")).willReturn(namespace);

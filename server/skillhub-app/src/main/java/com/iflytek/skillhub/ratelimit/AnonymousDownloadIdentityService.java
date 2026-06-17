@@ -1,6 +1,7 @@
 package com.iflytek.skillhub.ratelimit;
 
 import com.iflytek.skillhub.config.DownloadRateLimitProperties;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -11,6 +12,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.ResponseCookie;
@@ -24,6 +26,12 @@ import org.springframework.stereotype.Component;
 public class AnonymousDownloadIdentityService {
 
     private static final String COOKIE_VERSION = "v1";
+    private static final int MIN_SECRET_LENGTH = 32;
+    private static final Set<String> DISALLOWED_SECRET_VALUES = Set.of(
+            "change-me-in-production",
+            "replace-me",
+            "replace-with-random-download-secret-32-bytes"
+    );
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final DownloadRateLimitProperties properties;
@@ -33,6 +41,21 @@ public class AnonymousDownloadIdentityService {
                                             ClientIpResolver clientIpResolver) {
         this.properties = properties;
         this.clientIpResolver = clientIpResolver;
+    }
+
+    @PostConstruct
+    void validateAnonymousCookieSecret() {
+        String secret = properties.getAnonymousCookieSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET is required");
+        }
+        String trimmedSecret = secret.trim();
+        if (DISALLOWED_SECRET_VALUES.contains(trimmedSecret)) {
+            throw new IllegalStateException("SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET must not use the default placeholder");
+        }
+        if (trimmedSecret.length() < MIN_SECRET_LENGTH) {
+            throw new IllegalStateException("SKILLHUB_DOWNLOAD_ANON_COOKIE_SECRET must be at least 32 characters");
+        }
     }
 
     public AnonymousDownloadIdentity resolve(HttpServletRequest request, HttpServletResponse response) {

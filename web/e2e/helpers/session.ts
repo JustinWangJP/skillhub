@@ -1,4 +1,5 @@
 import { expect, type Page, type TestInfo } from '@playwright/test'
+import { csrfHeaders } from './csrf'
 
 const password = 'Passw0rd!123'
 const cachedUserByWorker = new Map<number, string>()
@@ -50,15 +51,17 @@ function isRetryableStatus(status: number): boolean {
 }
 
 async function loginWithRetry(
-  request: Page['request'],
+  page: Page,
   username: string,
   currentPassword = password,
   retries = process.env.CI ? 10 : 6,
 ): Promise<boolean> {
+  const request = page.context().request
   for (let i = 0; i < retries; i += 1) {
     try {
       const login = await request.post('/api/v1/auth/local/login', {
         data: { username, password: currentPassword },
+        headers: await csrfHeaders(page),
         timeout: requestTimeoutMs,
       })
 
@@ -187,13 +190,13 @@ async function registerSessionOnce(page: Page, testInfo?: TestInfo, options?: Re
   }
 
   // Prefer the known-good cached account to avoid repeated failed-logins on a fixed username.
-  if (cached && await loginWithRetry(request, cached)) {
+  if (cached && await loginWithRetry(page, cached)) {
     await cacheSession(page, worker, cached)
     return { username: cached, password }
   }
 
   // Support environments where a deterministic worker account already exists.
-  if (!cached && await loginWithRetry(request, username, password, process.env.CI ? 4 : 3)) {
+  if (!cached && await loginWithRetry(page, username, password, process.env.CI ? 4 : 3)) {
     cachedUserByWorker.set(worker, username)
     await cacheSession(page, worker, username)
     return { username, password }
@@ -206,6 +209,7 @@ async function registerSessionOnce(page: Page, testInfo?: TestInfo, options?: Re
         password,
         email: `${username}@example.test`,
       },
+      headers: await csrfHeaders(page),
       timeout: requestTimeoutMs,
     })
 
@@ -215,7 +219,7 @@ async function registerSessionOnce(page: Page, testInfo?: TestInfo, options?: Re
       return { username, password }
     }
 
-    if (register.status() === 409 && await loginWithRetry(request, username, password, process.env.CI ? 8 : 6)) {
+    if (register.status() === 409 && await loginWithRetry(page, username, password, process.env.CI ? 8 : 6)) {
       cachedUserByWorker.set(worker, username)
       await cacheSession(page, worker, username)
       return { username, password }
@@ -236,6 +240,7 @@ async function registerSessionOnce(page: Page, testInfo?: TestInfo, options?: Re
           password,
           email: `${uniqueUsername}@example.test`,
         },
+        headers: await csrfHeaders(page),
         timeout: requestTimeoutMs,
       })
 
@@ -269,7 +274,7 @@ async function registerSessionOnce(page: Page, testInfo?: TestInfo, options?: Re
   // Final fallback for environments where registration is temporarily unavailable.
   const fallbackCandidates = [cached, username].filter((candidate): candidate is string => Boolean(candidate))
   for (const candidate of fallbackCandidates) {
-    if (await loginWithRetry(request, candidate, password, process.env.CI ? 12 : 8)) {
+    if (await loginWithRetry(page, candidate, password, process.env.CI ? 12 : 8)) {
       cachedUserByWorker.set(worker, candidate)
       await cacheSession(page, worker, candidate)
       return { username: candidate, password }
@@ -295,6 +300,7 @@ async function createFreshSessionOnce(page: Page, testInfo?: TestInfo) {
           password,
           email: `${uniqueUsername}@example.test`,
         },
+        headers: await csrfHeaders(page),
         timeout: requestTimeoutMs,
       })
 
@@ -358,8 +364,6 @@ export async function createFreshSession(page: Page, testInfo?: TestInfo) {
 }
 
 export async function loginWithCredentials(page: Page, credentials: TestCredentials, _testInfo?: TestInfo) {
-  const request = page.context().request
-
   await primeAuthProviders(page)
 
   const restored = await restoreCachedSessionForAccount(page, credentials.username)
@@ -368,7 +372,7 @@ export async function loginWithCredentials(page: Page, credentials: TestCredenti
   }
 
   const loggedIn = await loginWithRetry(
-    request,
+    page,
     credentials.username,
     credentials.password,
     process.env.CI ? 12 : 8,
