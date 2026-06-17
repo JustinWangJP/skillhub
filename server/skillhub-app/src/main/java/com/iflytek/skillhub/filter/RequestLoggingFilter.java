@@ -8,6 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
@@ -39,6 +41,11 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String uri = request.getRequestURI();
+        if (isNotificationSse(uri)) {
+            prepareSseResponse(response);
+            filterChain.doFilter(request, response);
+            return;
+        }
         if (shouldSkip(uri)) {
             filterChain.doFilter(request, response);
             return;
@@ -98,6 +105,16 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             }
         }
         return false;
+    }
+
+    private boolean isNotificationSse(String uri) {
+        return uri != null && uri.endsWith("/notifications/sse");
+    }
+
+    private void prepareSseResponse(HttpServletResponse response) {
+        response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-cache, no-transform");
+        response.setHeader("X-Accel-Buffering", "no");
     }
 
     private String getRequestBody(ContentCachingRequestWrapper request) {

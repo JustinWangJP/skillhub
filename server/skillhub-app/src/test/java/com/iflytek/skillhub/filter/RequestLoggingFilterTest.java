@@ -1,22 +1,26 @@
 package com.iflytek.skillhub.filter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
-
+import jakarta.servlet.ServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.util.ContentCachingResponseWrapper;
 
 class RequestLoggingFilterTest {
 
@@ -79,12 +83,12 @@ class RequestLoggingFilterTest {
     }
 
     @Test
-    void doFilterInternal_skipsSseEndpointsWithoutWrappingResponse()
+    void doFilterInternal_skipsOtherSseEndpointsWithoutWrappingResponse()
             throws ServletException, IOException {
         RequestLoggingFilter filter = new RequestLoggingFilter();
         attachAppender();
 
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/web/notifications/sse");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/web/scan/sse");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         FilterChain filterChain = (req, res) -> {
@@ -97,8 +101,10 @@ class RequestLoggingFilterTest {
         filter.doFilter(request, response, filterChain);
 
         assertThat(response.getHeader("Content-Length")).isNull();
+        assertThat(response.getHeader("X-Accel-Buffering")).isNull();
+        assertThat(response.getHeader(HttpHeaders.CACHE_CONTROL)).isNull();
         assertThat(response.getContentAsString()).isEqualTo("event:connected\n");
-        assertThat(loggedMessages()).noneMatch(message -> message.contains("/api/web/notifications/sse"));
+        assertThat(loggedMessages()).noneMatch(message -> message.contains("/api/web/scan/sse"));
     }
 
     @Test
@@ -122,6 +128,44 @@ class RequestLoggingFilterTest {
             assertThat(message).contains("ms");
         });
         assertThat(loggedMessages()).noneMatch(message -> message.contains("Headers: {"));
+    }
+
+    @Test
+    void doFilterInternal_shouldBypassCachingWrapperForNotificationSse() throws Exception {
+        RequestLoggingFilter filter = new RequestLoggingFilter();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/web/notifications/sse");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<ServletResponse> responseSeenByChain = new AtomicReference<>();
+        FilterChain chain = (servletRequest, servletResponse) -> {
+            responseSeenByChain.set(servletResponse);
+            servletResponse.getWriter().write("event: connected\n");
+            servletResponse.flushBuffer();
+        };
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(responseSeenByChain.get()).isSameAs(response);
+        assertThat(response.getHeader("X-Accel-Buffering")).isEqualTo("no");
+        assertThat(response.getHeader(HttpHeaders.CACHE_CONTROL)).isEqualTo("no-cache, no-transform");
+        assertThat(response.getContentType()).isEqualTo(MediaType.TEXT_EVENT_STREAM_VALUE);
+        assertThat(response.getContentAsString()).contains("event: connected");
+    }
+
+    @Test
+    void doFilterInternal_shouldKeepCachingWrapperForRegularApiResponses() throws Exception {
+        RequestLoggingFilter filter = new RequestLoggingFilter();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/web/notifications/unread-count");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicReference<ServletResponse> responseSeenByChain = new AtomicReference<>();
+        FilterChain chain = (servletRequest, servletResponse) -> {
+            responseSeenByChain.set(servletResponse);
+            servletResponse.getWriter().write("{\"count\":1}");
+        };
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(responseSeenByChain.get()).isInstanceOf(ContentCachingResponseWrapper.class);
+        assertThat(response.getContentAsString()).isEqualTo("{\"count\":1}");
     }
 
     private void attachAppender() {
