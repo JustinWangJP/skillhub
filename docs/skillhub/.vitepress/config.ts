@@ -7,6 +7,11 @@ export default defineConfig({
   ignoreDeadLinks: [/^http:\/\/localhost/],
 
   head: [],
+  vite: {
+    build: {
+      target: 'es2020',
+    },
+  },
 
   // Define root locale for redirect
   locales: {
