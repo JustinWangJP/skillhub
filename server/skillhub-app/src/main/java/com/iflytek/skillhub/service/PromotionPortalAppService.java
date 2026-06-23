@@ -7,17 +7,21 @@ import com.iflytek.skillhub.domain.review.PromotionRequest;
 import com.iflytek.skillhub.domain.review.PromotionRequestRepository;
 import com.iflytek.skillhub.domain.review.PromotionService;
 import com.iflytek.skillhub.domain.review.ReviewTaskStatus;
+import com.iflytek.skillhub.domain.shared.exception.DomainBadRequestException;
 import com.iflytek.skillhub.domain.shared.exception.DomainForbiddenException;
 import com.iflytek.skillhub.domain.shared.exception.DomainNotFoundException;
 import com.iflytek.skillhub.dto.PageResponse;
 import com.iflytek.skillhub.dto.PromotionResponseDto;
 import com.iflytek.skillhub.repository.GovernanceQueryRepository;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -98,10 +102,12 @@ public class PromotionPortalAppService {
     public PageResponse<PromotionResponseDto> listPromotions(String status,
                                                              int page,
                                                              int size,
+                                                             String sortBy,
+                                                             String sortDirection,
                                                              String userId) {
         requirePromotionAdmin(userId);
-        ReviewTaskStatus reviewStatus = ReviewTaskStatus.valueOf(status.toUpperCase());
-        Page<PromotionRequest> requests = promotionRequestRepository.findByStatus(reviewStatus, PageRequest.of(page, size));
+        ReviewTaskStatus reviewStatus = parsePromotionStatus(status);
+        Page<PromotionRequest> requests = findPromotionRequests(reviewStatus, page, size, sortBy, sortDirection);
         return PageResponse.from(new PageImpl<>(
                 governanceQueryRepository.getPromotionResponses(requests.getContent()),
                 requests.getPageable(),
@@ -112,7 +118,16 @@ public class PromotionPortalAppService {
     public PageResponse<PromotionResponseDto> listPendingPromotions(int page, int size, String userId) {
         requirePromotionAdmin(userId);
         Page<PromotionRequest> requests = promotionRequestRepository.findByStatus(
-                ReviewTaskStatus.PENDING, PageRequest.of(page, size));
+                ReviewTaskStatus.PENDING,
+                PageRequest.of(
+                        page,
+                        size,
+                        Sort.by(
+                                new Sort.Order(Sort.Direction.DESC, "submittedAt"),
+                                new Sort.Order(Sort.Direction.DESC, "id")
+                        )
+                )
+        );
         return PageResponse.from(new PageImpl<>(
                 governanceQueryRepository.getPromotionResponses(requests.getContent()),
                 requests.getPageable(),
@@ -127,6 +142,72 @@ public class PromotionPortalAppService {
             throw new DomainForbiddenException("promotion.no_permission");
         }
         return governanceQueryRepository.getPromotionResponse(promotion);
+    }
+
+    private ReviewTaskStatus parsePromotionStatus(String status) {
+        if (status == null) {
+            return ReviewTaskStatus.PENDING;
+        }
+        if (status.isBlank()) {
+            throw new DomainBadRequestException("promotion.status.invalid", status);
+        }
+        try {
+            ReviewTaskStatus parsed = ReviewTaskStatus.valueOf(status.toUpperCase(Locale.ROOT));
+            return switch (parsed) {
+                case PENDING, APPROVED, REJECTED -> parsed;
+                default -> throw new DomainBadRequestException("promotion.status.invalid", status);
+            };
+        } catch (IllegalArgumentException ex) {
+            throw new DomainBadRequestException("promotion.status.invalid", status);
+        }
+    }
+
+    private Page<PromotionRequest> findPromotionRequests(ReviewTaskStatus status,
+                                                         int page,
+                                                         int size,
+                                                         String sortBy,
+                                                         String sortDirection) {
+        if (status == ReviewTaskStatus.PENDING) {
+            if (sortBy != null || sortDirection != null) {
+                throw new DomainBadRequestException("promotion.sort.pending_unsupported");
+            }
+            return promotionRequestRepository.findByStatus(
+                    status,
+                    PageRequest.of(
+                            page,
+                            size,
+                            Sort.by(
+                                    new Sort.Order(Sort.Direction.DESC, "submittedAt"),
+                                    new Sort.Order(Sort.Direction.DESC, "id")
+                            )
+                    )
+            );
+        }
+
+        if (sortBy != null && (sortBy.isBlank() || !"reviewedAt".equals(sortBy))) {
+            throw new DomainBadRequestException("promotion.sort.field.invalid", sortBy);
+        }
+
+        Sort.Direction direction = parsePromotionSortDirection(sortDirection);
+        Pageable pageable = PageRequest.of(page, size);
+        if (direction == Sort.Direction.ASC) {
+            return promotionRequestRepository.findHistoryByStatusOrderByReviewedAtAsc(status, pageable);
+        }
+        return promotionRequestRepository.findHistoryByStatusOrderByReviewedAtDesc(status, pageable);
+    }
+
+    private Sort.Direction parsePromotionSortDirection(String sortDirection) {
+        if (sortDirection == null) {
+            return Sort.Direction.DESC;
+        }
+        if (sortDirection.isBlank()) {
+            throw new DomainBadRequestException("promotion.sort.direction.invalid", sortDirection);
+        }
+        try {
+            return Sort.Direction.valueOf(sortDirection.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new DomainBadRequestException("promotion.sort.direction.invalid", sortDirection);
+        }
     }
 
     private void requirePromotionAdmin(String userId) {
